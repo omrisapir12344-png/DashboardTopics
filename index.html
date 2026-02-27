@@ -358,11 +358,12 @@ document.querySelectorAll('.tab').forEach(function(t){
 // ======= TIME BUTTONS =======
 function buildTimeButtons() {
   var lastDate = D.lastDate;
+  var MONTH_HE2 = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   var configs = [
     {id:'all',  label:'הכל'},
-    {id:'year', label:'שנה'},
-    {id:'month',label:'חודש'},
-    {id:'week', label:'שבוע'},
+    {id:'year', label:'שנת '+lastDate[0]},
+    {id:'month',label:MONTH_HE2[lastDate[1]]+' '+lastDate[0]},
+    {id:'week', label:'שבוע אחרון'},
     {id:'day',  label:lastDate[2]+'/'+lastDate[1]+'/'+lastDate[0]}
   ];
   ['time-btns','crit-time-btns','bef-time-btns','dur-time-btns','aft-time-btns'].forEach(function(id){
@@ -392,10 +393,33 @@ function getFilteredMonths() {
   var all = D.months;
   var ld = D.lastDate; // [y,m,d]
   if(selectedFilter==='all') return all;
-  if(selectedFilter==='day') return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
-  if(selectedFilter==='week'||selectedFilter==='month') return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
-  if(selectedFilter==='year') return all.filter(function(mo){return mo.y===ld[0];});
+  if(selectedFilter==='day') {
+    // יום אחרון = החודש האחרון בלבד
+    return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
+  }
+  if(selectedFilter==='week') {
+    // שבוע = החודש האחרון
+    return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
+  }
+  if(selectedFilter==='month') {
+    // חודש = החודש האחרון בלבד
+    return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
+  }
+  if(selectedFilter==='year') {
+    // שנה = כל החודשים של השנה האחרונה
+    return all.filter(function(mo){return mo.y===ld[0];});
+  }
   return all;
+}
+
+function getFilterLabel() {
+  var ld = D.lastDate;
+  var MONTH_HE = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  if(selectedFilter==='day')   return ld[2]+'/'+ld[1]+'/'+ld[0];
+  if(selectedFilter==='week')  return 'שבוע אחרון — '+MONTH_HE[ld[1]]+' '+ld[0];
+  if(selectedFilter==='month') return MONTH_HE[ld[1]]+' '+ld[0];
+  if(selectedFilter==='year')  return 'שנת '+ld[0];
+  return 'כל הזמנים';
 }
 
 function aggregateMonths(months) {
