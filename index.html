@@ -42,7 +42,7 @@ body{font-family:'Heebo',sans-serif;background:var(--dark);color:var(--text);dir
 .tab.active.t-before{border-bottom-color:var(--blue);color:var(--blue)}
 .tab.active.t-during{border-bottom-color:var(--gold);color:var(--gold)}
 .topbar-right{margin-right:auto;display:flex;align-items:center;gap:10px}
-#last-updated{font-size:10px;color:#333;text-align:left}
+#last-updated{font-size:10px;color:#333;text-align:left;line-height:1.5}
 #refresh-btn{background:transparent;border:1px solid #222;color:#444;padding:6px 12px;border-radius:6px;font-family:'Heebo';font-size:11px;cursor:pointer;transition:all 0.15s}
 #refresh-btn:hover{border-color:#444;color:#aaa}
 
@@ -116,6 +116,28 @@ body{font-family:'Heebo',sans-serif;background:var(--dark);color:var(--text);dir
 /* RESPONSIVE */
 @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}.grid3{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.kpi-row,.grid2,.grid3{grid-template-columns:1fr}.page{padding:16px}.topbar{padding:0 16px}.tab{padding:16px 12px;font-size:12px}}
+
+/* COMPARE PAGE */
+.date-picker-row{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.date-picker-row label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.date-input{background:#111;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-family:'Heebo';font-size:13px;cursor:pointer}
+.date-input::-webkit-calendar-picker-indicator{filter:invert(1);opacity:0.5}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px}
+.compare-card.week{border-top:3px solid var(--blue)}
+.compare-card.weekend{border-top:3px solid var(--gold)}
+.compare-title{font-size:13px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.compare-kpi{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #161616}
+.compare-kpi:last-child{border-bottom:none}
+.compare-kpi-label{font-size:12px;color:var(--muted)}
+.compare-kpi-val{font-size:14px;font-weight:900;color:#fff}
+.day-bars{margin-top:16px}
+.day-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.day-name{font-size:11px;font-weight:800;color:#888;width:40px;text-align:right;flex-shrink:0}
+.day-bar-wrap{flex:1;height:6px;background:#1e1e1e;border-radius:3px}
+.day-bar-fill{height:100%;border-radius:3px;transition:width 0.4s}
+.day-bar-val{font-size:11px;font-weight:800;color:#aaa;min-width:40px;text-align:left}
+@media(max-width:700px){.compare-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -147,6 +169,7 @@ body{font-family:'Heebo',sans-serif;background:var(--dark);color:var(--text);dir
     <button class="tab t-during" data-page="during">🛒 ביצוע הזמנה</button>
     <button class="tab t-after" data-page="after">📦 אחרי הזמנה</button>
     <button class="tab t-insights" data-page="insights">💡 תובנות</button>
+    <button class="tab t-compare" data-page="compare">📅 השוואה</button>
   </div>
   <div class="topbar-right">
     <div id="last-updated"></div>
@@ -311,11 +334,11 @@ body{font-family:'Heebo',sans-serif;background:var(--dark);color:var(--text);dir
 </div>
 
 <script>
-var APPS_URL = 'https://script.google.com/macros/s/AKfycbzuZcp1t1Z8YEqrjNAzdtKtU7sf4k0K5vjbypp7lVHnWCY03ovqNmlE7tCQa0hGav6tGQ/exec';
+var APPS_URL = 'https://script.google.com/macros/s/AKfycbzmzK92OF5XvKLTxzB4VWTvGIglIdf_C-9fJqEeOKismqOdn6RZRufgzJyikBxY2t-VGQ/exec';
 var D = null; // raw API data
 var charts = {};
 var currentPage = 'main';
-var selectedFilter = 'all'; // all / year / month / week / day
+var selectedFilter = 'all';
 var MONTH_NAMES = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
 // ======= LOAD =======
@@ -323,23 +346,42 @@ function loadData(forceRefresh) {
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('load-error').style.display = 'none';
   document.getElementById('load-status').textContent = 'מתחבר ל-Google Sheets...';
-  var url = APPS_URL + (forceRefresh ? '?bust=' + Date.now() : '');
-  fetch(url)
-    .then(function(r){ document.getElementById('load-status').textContent='מעבד נתונים...'; return r.json(); })
+  var url = APPS_URL + (forceRefresh ? '?bust=' + Date.now() : '?t=' + Date.now());
+  
+  // timeout of 30 seconds
+  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 30000) : null;
+  
+  var fetchOptions = controller ? {signal: controller.signal} : {};
+  
+  fetch(url, fetchOptions)
+    .then(function(r){ 
+      if(timeoutId) clearTimeout(timeoutId);
+      document.getElementById('load-status').textContent='מעבד נתונים...'; 
+      return r.json(); 
+    })
     .then(function(data){
       if(data.error) throw new Error(data.error);
       D = data;
       document.getElementById('loading').style.display = 'none';
       var lu = new Date(data.lastUpdated);
-      document.getElementById('last-updated').textContent = 'עודכן: ' + lu.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+      var ld = data.lastDate;
+      var dateStr = ld[2]+'/'+ld[1]+'/'+ld[0];
+      var timeStr = lu.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('last-updated').innerHTML = 
+        '<span style="color:#555;font-size:10px">נתונים עד: </span>' +
+        '<span style="color:#E31837;font-weight:800;font-size:11px">'+dateStr+'</span>' +
+        '<span style="color:#333;font-size:10px"> · טעינה: '+timeStr+'</span>';
       buildTimeButtons();
       renderPage();
       buildInsightsMonthButtons();
+      initCompare();
     })
     .catch(function(err){
-      document.getElementById('load-status').style.display='none';
+      document.getElementById('load-status').textContent = '';
       document.getElementById('load-error').style.display='block';
-      document.getElementById('load-error-msg').textContent = err.message;
+      var msg = err.name === 'AbortError' ? 'הבקשה לקחה יותר מדי זמן. בדוק חיבור אינטרנט ונסה שוב.' : err.message;
+      document.getElementById('load-error-msg').textContent = msg;
     });
 }
 
@@ -352,38 +394,102 @@ document.querySelectorAll('.tab').forEach(function(t){
     currentPage = t.dataset.page;
     document.getElementById('page-'+currentPage).classList.add('active');
     if(D) renderPage();
+    if(currentPage==='compare') { initCompare(); renderCompare(); }
   });
 });
 
 // ======= TIME BUTTONS =======
 function buildTimeButtons() {
-  var lastDate = D.lastDate;
   var MONTH_HE2 = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  var configs = [
-    {id:'all',  label:'הכל'},
-    {id:'year', label:'שנת '+lastDate[0]},
-    {id:'month',label:MONTH_HE2[lastDate[1]]+' '+lastDate[0]},
-    {id:'week', label:'שבוע אחרון'},
-    {id:'day',  label:lastDate[2]+'/'+lastDate[1]+'/'+lastDate[0]}
-  ];
-  ['time-btns','crit-time-btns','bef-time-btns','dur-time-btns','aft-time-btns'].forEach(function(id){
-    var el = document.getElementById(id);
+
+  ['time-btns','crit-time-btns','bef-time-btns','dur-time-btns','aft-time-btns'].forEach(function(containerId){
+    var el = document.getElementById(containerId);
     if(!el) return;
-    el.innerHTML='';
-    el.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
-    configs.forEach(function(cfg){
+    el.innerHTML = '';
+    el.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+
+    // כפתורים קבועים
+    var ld2 = D.lastDate;
+    [{id:'all',label:'הכל'},{id:'year-2025',label:'שנת 2025'},{id:'year-2026',label:'שנת 2026'},{id:'week',label:'שבוע אחרון'},{id:'day',label:ld2[2]+'/'+ld2[1]+'/'+ld2[0]}]
+    .forEach(function(cfg){
       var btn = document.createElement('button');
-      btn.className='tBtn'+(cfg.id===selectedFilter?' active':'');
-      btn.textContent=cfg.label;
-      btn.dataset.filter=cfg.id;
-      btn.onclick=function(){
-        selectedFilter=cfg.id;
+      btn.className = 'tBtn' + (cfg.id===selectedFilter?' active':'');
+      btn.textContent = cfg.label;
+      btn.dataset.filter = cfg.id;
+      btn.onclick = function(){
+        selectedFilter = cfg.id;
+        document.querySelectorAll('.month-dd').forEach(function(d){d.style.display='none';});
         document.querySelectorAll('.tBtn').forEach(function(b){b.classList.remove('active');});
         document.querySelectorAll('.tBtn[data-filter="'+cfg.id+'"]').forEach(function(b){b.classList.add('active');});
         renderPage();
       };
       el.appendChild(btn);
     });
+
+    // כפתור חודש עם dropdown
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative';
+
+    var mBtn = document.createElement('button');
+    mBtn.className = 'tBtn month-trigger' + (selectedFilter.indexOf('month-')===0?' active':'');
+    mBtn.dataset.container = containerId;
+    var mLabel = selectedFilter.indexOf('month-')===0
+      ? MONTH_HE2[parseInt(selectedFilter.split('-')[2])]+' '+selectedFilter.split('-')[1]
+      : 'חודש';
+    mBtn.innerHTML = mLabel + ' ▾';
+    mBtn.onclick = function(e){
+      e.stopPropagation();
+      var dd = wrap.querySelector('.month-dd');
+      var isOpen = dd.style.display==='block';
+      document.querySelectorAll('.month-dd').forEach(function(d){d.style.display='none';});
+      dd.style.display = isOpen?'none':'block';
+    };
+    wrap.appendChild(mBtn);
+
+    // Dropdown
+    var dd = document.createElement('div');
+    dd.className = 'month-dd';
+    dd.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);right:0;background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:12px;z-index:9999;min-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.6)';
+
+    var byYear = {};
+    D.months.forEach(function(mo){ if(!byYear[mo.y]) byYear[mo.y]=[]; byYear[mo.y].push(mo); });
+
+    Object.keys(byYear).sort().reverse().forEach(function(yr){
+      var yLabel = document.createElement('div');
+      yLabel.style.cssText = 'font-size:10px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:1px;padding:2px 4px 6px';
+      yLabel.textContent = yr;
+      dd.appendChild(yLabel);
+
+      var grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px';
+
+      byYear[yr].forEach(function(mo){
+        var mk = 'month-'+mo.y+'-'+mo.m;
+        var mb = document.createElement('button');
+        var isActive = selectedFilter===mk;
+        mb.style.cssText = 'padding:7px 4px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:Heebo,sans-serif;border:1px solid '+(isActive?'#E31837':'#252525')+';background:'+(isActive?'#E31837':'transparent')+';color:'+(isActive?'#fff':'#777')+';transition:all 0.15s';
+        mb.textContent = MONTH_HE2[mo.m];
+        mb.onmouseover = function(){if(selectedFilter!==mk){this.style.background='#1e1e1e';this.style.color='#fff';}};
+        mb.onmouseout  = function(){if(selectedFilter!==mk){this.style.background='transparent';this.style.color='#777';}};
+        mb.onclick = function(e){
+          e.stopPropagation();
+          selectedFilter = mk;
+          dd.style.display = 'none';
+          document.querySelectorAll('.tBtn').forEach(function(b){b.classList.remove('active');});
+          document.querySelectorAll('.month-trigger').forEach(function(b){
+            b.classList.add('active');
+            b.innerHTML = MONTH_HE2[mo.m]+' '+mo.y+' ▾';
+          });
+          renderPage();
+        };
+        grid.appendChild(mb);
+      });
+      dd.appendChild(grid);
+    });
+
+    document.addEventListener('click', function(){ dd.style.display='none'; }, {once:false});
+    wrap.appendChild(dd);
+    el.appendChild(wrap);
   });
 }
 
@@ -391,35 +497,52 @@ function buildTimeButtons() {
 function getFilteredMonths() {
   if(!D) return [];
   var all = D.months;
-  var ld = D.lastDate; // [y,m,d]
-  if(selectedFilter==='all') return all;
-  if(selectedFilter==='day') {
-    // יום אחרון = החודש האחרון בלבד
-    return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
-  }
-  if(selectedFilter==='week') {
-    // שבוע = החודש האחרון
-    return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
-  }
-  if(selectedFilter==='month') {
-    // חודש = החודש האחרון בלבד
-    return all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
-  }
-  if(selectedFilter==='year') {
-    // שנה = כל החודשים של השנה האחרונה
-    return all.filter(function(mo){return mo.y===ld[0];});
-  }
-  return all;
-}
-
-function getFilterLabel() {
   var ld = D.lastDate;
-  var MONTH_HE = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
-  if(selectedFilter==='day')   return ld[2]+'/'+ld[1]+'/'+ld[0];
-  if(selectedFilter==='week')  return 'שבוע אחרון — '+MONTH_HE[ld[1]]+' '+ld[0];
-  if(selectedFilter==='month') return MONTH_HE[ld[1]]+' '+ld[0];
-  if(selectedFilter==='year')  return 'שנת '+ld[0];
-  return 'כל הזמנים';
+  if(selectedFilter==='all') return all;
+
+  if(selectedFilter.indexOf('year-')===0) {
+    var yr = parseInt(selectedFilter.replace('year-',''));
+    return all.filter(function(mo){return mo.y===yr;});
+  }
+
+  if(selectedFilter.indexOf('month-')===0) {
+    var parts = selectedFilter.split('-');
+    var yr2=parseInt(parts[1]), mn=parseInt(parts[2]);
+    return all.filter(function(mo){return mo.y===yr2&&mo.m===mn;});
+  }
+
+  var currMonth = all.filter(function(mo){return mo.y===ld[0]&&mo.m===ld[1];});
+  if(!currMonth.length) return [];
+
+  if(selectedFilter==='week') {
+    var lastDay=ld[2], firstDay=Math.max(1,lastDay-6);
+    return currMonth.map(function(mo){
+      var f=Object.assign({},mo);
+      var dt=0; for(var d=firstDay;d<=lastDay;d++) dt+=(mo.byDay[d]||0);
+      var ratio=mo.total>0?dt/mo.total:0;
+      f.total=dt; f.scored=Math.round(mo.scored*ratio); f.critical=Math.round(mo.critical*ratio);
+      f.topTags=mo.topTags.map(function(e){return{t:e.t,c:Math.round(e.c*ratio)};}).filter(function(e){return e.c>0;});
+      f.topBranches=mo.topBranches.map(function(e){return{b:e.b,c:Math.round(e.c*ratio)};}).filter(function(e){return e.c>0;});
+      f.byCat={0:Math.round((mo.byCat[0]||0)*ratio),1:Math.round((mo.byCat[1]||0)*ratio),2:Math.round((mo.byCat[2]||0)*ratio),3:Math.round((mo.byCat[3]||0)*ratio)};
+      return f;
+    });
+  }
+
+  if(selectedFilter==='day') {
+    var lastDay2=ld[2];
+    return currMonth.map(function(mo){
+      var f=Object.assign({},mo);
+      var dt=mo.byDay[lastDay2]||0;
+      var ratio=mo.total>0?dt/mo.total:0;
+      f.total=dt; f.scored=Math.round(mo.scored*ratio); f.critical=Math.round(mo.critical*ratio);
+      f.topTags=mo.topTags.map(function(e){return{t:e.t,c:Math.round(e.c*ratio)};}).filter(function(e){return e.c>0;});
+      f.topBranches=mo.topBranches.map(function(e){return{b:e.b,c:Math.round(e.c*ratio)};}).filter(function(e){return e.c>0;});
+      f.byCat={0:Math.round((mo.byCat[0]||0)*ratio),1:Math.round((mo.byCat[1]||0)*ratio),2:Math.round((mo.byCat[2]||0)*ratio),3:Math.round((mo.byCat[3]||0)*ratio)};
+      return f;
+    });
+  }
+
+  return all;
 }
 
 function aggregateMonths(months) {
@@ -435,7 +558,7 @@ function aggregateMonths(months) {
   });
   agg.scoreAvg = agg.scored ? Math.round(agg.scoreSum/agg.scored*100)/100 : 0;
   agg.topTags = Object.entries(agg.byTag).sort(function(a,b){return b[1]-a[1];}).slice(0,15);
-  agg.topBranches = Object.entries(agg.byBranch).sort(function(a,b){return b[1]-a[1];}).slice(0,15);
+  agg.topBranches = Object.entries(agg.byBranch).filter(function(e){return e[0]!=='סניף לא ידוע';}).sort(function(a,b){return b[1]-a[1];}).slice(0,15);
   return agg;
 }
 
@@ -779,8 +902,169 @@ function set(id, html) {
   if(el) el.innerHTML = html;
 }
 
+
+// ======= COMPARE =======
+function initCompare() {
+  if(!D) return;
+  var ld = D.lastDate;
+  // default: last 30 days
+  var toDate = new Date(ld[0], ld[1]-1, ld[2]);
+  var fromDate = new Date(toDate); fromDate.setDate(fromDate.getDate()-29);
+  document.getElementById('date-from').value = formatDateInput(fromDate);
+  document.getElementById('date-to').value   = formatDateInput(toDate);
+}
+
+function formatDateInput(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function renderCompare() {
+  if(!D) return;
+  var fromVal = document.getElementById('date-from').value;
+  var toVal   = document.getElementById('date-to').value;
+  if(!fromVal||!toVal) return;
+
+  var from = new Date(fromVal), to = new Date(toVal);
+  if(from>to) { alert('תאריך התחלה חייב להיות לפני תאריך סיום'); return; }
+
+  // Collect data from byDay within date range
+  var weekdays = {total:0,tags:{},branches:{},scoreSum:0,scored:0,critical:0,byCat:{0:0,1:0,2:0,3:0}};
+  var weekend  = {total:0,tags:{},branches:{},scoreSum:0,scored:0,critical:0,byCat:{0:0,1:0,2:0,3:0}};
+  var byDayOfWeek = {0:0,1:0,2:0,3:0,4:0,5:0,6:0}; // sun=0
+  var byDay = {}; // date string -> count
+
+  D.months.forEach(function(mo) {
+    if(!mo.byDay) return;
+    Object.keys(mo.byDay).forEach(function(day) {
+      var d = new Date(mo.y, mo.m-1, parseInt(day));
+      if(d < from || d > to) return;
+      var cnt = mo.byDay[day];
+      var dow = d.getDay(); // 0=sun,6=sat
+      var isWeekend = (dow===5||dow===6); // fri=5, sat=6
+      var ratio = mo.total>0 ? cnt/mo.total : 0;
+      var target = isWeekend ? weekend : weekdays;
+
+      target.total += cnt;
+      target.scored   += Math.round(mo.scored*ratio);
+      target.critical += Math.round(mo.critical*ratio);
+      target.scoreSum += mo.scoreAvg * Math.round(mo.scored*ratio);
+      [0,1,2,3].forEach(function(c){target.byCat[c]+= Math.round((mo.byCat[c]||0)*ratio);});
+      mo.topTags.forEach(function(e){target.tags[e.t]=(target.tags[e.t]||0)+Math.round(e.c*ratio);});
+      mo.topBranches.forEach(function(e){
+        if(e.b==='סניף לא ידוע') return;
+        target.branches[e.b]=(target.branches[e.b]||0)+Math.round(e.c*ratio);
+      });
+      byDayOfWeek[dow] = (byDayOfWeek[dow]||0) + cnt;
+      var dk = mo.y+'-'+String(mo.m).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+      byDay[dk] = (byDay[dk]||0) + cnt;
+    });
+  });
+
+  var totalAll = weekdays.total + weekend.total;
+
+  function topItems(obj, n) {
+    return Object.entries(obj).sort(function(a,b){return b[1]-a[1];}).slice(0,n);
+  }
+
+  function scoreAvg(obj) {
+    return obj.scored>0 ? (obj.scoreSum/obj.scored).toFixed(2) : '—';
+  }
+
+  function pctOf(a,b){ return b>0?(a/b*100).toFixed(1)+'%':'0%'; }
+
+  var DAY_NAMES = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  var maxDow = Math.max.apply(null, Object.values(byDayOfWeek).concat([1]));
+
+  // Build HTML
+  var html = '';
+
+  // Summary header
+  html += '<div style="background:linear-gradient(135deg,#0a0a0a,#111);border:1px solid #222;border-radius:14px;padding:16px 20px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center">';
+  html += '<div style="font-size:13px;font-weight:800;color:#fff">📅 '+fromVal.split('-').reverse().join('/')+' — '+toVal.split('-').reverse().join('/')+'</div>';
+  html += '<div style="font-size:12px;color:#555">סה"כ: <b style="color:#fff">'+totalAll.toLocaleString()+'</b> פניות</div>';
+  html += '<div style="font-size:12px;color:#555">ימי עבודה: <b style="color:var(--blue)">'+weekdays.total.toLocaleString()+'</b></div>';
+  html += '<div style="font-size:12px;color:#555">סוף שבוע: <b style="color:var(--gold)">'+weekend.total.toLocaleString()+'</b></div>';
+  html += '</div>';
+
+  // Two columns: weekdays vs weekend
+  html += '<div class="compare-grid">';
+
+  // WEEKDAYS
+  html += '<div class="compare-card week">';
+  html += '<div class="compare-title" style="color:var(--blue)">📆 ימי עבודה (א׳–ה׳)</div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">סה"כ פניות</span><span class="compare-kpi-val" style="color:var(--blue)">'+weekdays.total.toLocaleString()+'</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">% מהכלל</span><span class="compare-kpi-val">'+pctOf(weekdays.total,totalAll)+'</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">ממוצע סקר</span><span class="compare-kpi-val" style="color:var(--gold)">'+scoreAvg(weekdays)+'</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">קריטיים</span><span class="compare-kpi-val" style="color:var(--red)">'+weekdays.critical.toLocaleString()+' ('+pctOf(weekdays.critical,weekdays.total)+')</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">אחרי הזמנה</span><span class="compare-kpi-val">'+pctOf(weekdays.byCat[2],weekdays.total)+'</span></div>';
+  var topWBranch = topItems(weekdays.branches,1);
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">סניף מוביל</span><span class="compare-kpi-val" style="font-size:11px">'+( topWBranch.length?topWBranch[0][0]:'—')+'</span></div>';
+  html += '<div style="font-size:11px;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">תיוגים מובילים</div>';
+  var topWT = topItems(weekdays.tags,5);
+  var maxWT = topWT.length?topWT[0][1]:1;
+  topWT.forEach(function(e,i){
+    html += '<div class="bar-row"><div class="bar-label" style="font-size:11px">'+(i+1)+'. '+shortTag(e[0])+'</div>';
+    html += '<div class="bar-wrap"><div class="bar-fill" style="width:'+(e[1]/maxWT*100).toFixed(0)+'%;background:var(--blue)"></div></div>';
+    html += '<div class="bar-val" style="font-size:11px">'+e[1].toLocaleString()+'</div></div>';
+  });
+  html += '</div>';
+
+  // WEEKEND
+  html += '<div class="compare-card weekend">';
+  html += '<div class="compare-title" style="color:var(--gold)">🌅 סוף שבוע (ו׳–ש׳)</div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">סה"כ פניות</span><span class="compare-kpi-val" style="color:var(--gold)">'+weekend.total.toLocaleString()+'</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">% מהכלל</span><span class="compare-kpi-val">'+pctOf(weekend.total,totalAll)+'</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">ממוצע סקר</span><span class="compare-kpi-val" style="color:var(--gold)">'+scoreAvg(weekend)+'</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">קריטיים</span><span class="compare-kpi-val" style="color:var(--red)">'+weekend.critical.toLocaleString()+' ('+pctOf(weekend.critical,weekend.total)+')</span></div>';
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">אחרי הזמנה</span><span class="compare-kpi-val">'+pctOf(weekend.byCat[2],weekend.total)+'</span></div>';
+  var topEBranch = topItems(weekend.branches,1);
+  html += '<div class="compare-kpi"><span class="compare-kpi-label">סניף מוביל</span><span class="compare-kpi-val" style="font-size:11px">'+( topEBranch.length?topEBranch[0][0]:'—')+'</span></div>';
+  html += '<div style="font-size:11px;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">תיוגים מובילים</div>';
+  var topET = topItems(weekend.tags,5);
+  var maxET = topET.length?topET[0][1]:1;
+  topET.forEach(function(e,i){
+    html += '<div class="bar-row"><div class="bar-label" style="font-size:11px">'+(i+1)+'. '+shortTag(e[0])+'</div>';
+    html += '<div class="bar-wrap"><div class="bar-fill" style="width:'+(e[1]/maxET*100).toFixed(0)+'%;background:var(--gold)"></div></div>';
+    html += '<div class="bar-val" style="font-size:11px">'+e[1].toLocaleString()+'</div></div>';
+  });
+  html += '</div>';
+  html += '</div>'; // compare-grid
+
+  // Day of week distribution
+  html += '<div class="card">';
+  html += '<div class="card-title">📊 התפלגות לפי יום בשבוע</div>';
+  html += '<div class="day-bars">';
+  [0,1,2,3,4,5,6].forEach(function(dow){
+    var cnt = byDayOfWeek[dow]||0;
+    var isWE = (dow===5||dow===6);
+    var color = isWE?'var(--gold)':'var(--blue)';
+    var pct2 = maxDow>0?(cnt/maxDow*100).toFixed(0):0;
+    html += '<div class="day-bar-row">';
+    html += '<div class="day-name">'+DAY_NAMES[dow]+'</div>';
+    html += '<div class="day-bar-wrap"><div class="day-bar-fill" style="width:'+pct2+'%;background:'+color+'"></div></div>';
+    html += '<div class="day-bar-val">'+cnt.toLocaleString()+'</div>';
+    html += '<div style="font-size:10px;color:#444;margin-right:6px">'+pctOf(cnt,totalAll)+'</div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+
+  document.getElementById('compare-content').innerHTML = html;
+}
+
 // ======= INIT =======
 loadData();
 </script>
+
+<!-- PAGE: COMPARE -->
+<div class="page" id="page-compare">
+  <div class="date-picker-row">
+    <label>מתאריך:</label>
+    <input type="date" class="date-input" id="date-from">
+    <label>עד תאריך:</label>
+    <input type="date" class="date-input" id="date-to">
+    <button class="tBtn active" onclick="renderCompare()" style="background:var(--red);color:#fff;border-color:var(--red)">🔍 הצג</button>
+  </div>
+  <div id="compare-content"></div>
+</div>
 </body>
 </html>
