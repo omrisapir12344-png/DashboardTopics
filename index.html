@@ -875,9 +875,10 @@ function renderBranches() {
 
   // Bar
   const showN = Math.min(15, branchData.length);
+  const sliceData = branchData.slice(0, showN);
   makeChart('br-bar','bar',
-    branchData.slice(0,showN).map(r=>r.branch),
-    [{ data:branchData.slice(0,showN).map(r=>r.count), backgroundColor:'#E31837cc', borderRadius:4, borderSkipped:false }],
+    sliceData.map(r=>`${r.branch} (${(100*r.count/total).toFixed(1)}%)`),
+    [{ data:sliceData.map(r=>r.count), backgroundColor:'#E31837cc', borderRadius:4, borderSkipped:false }],
     { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
   );
 
@@ -913,12 +914,21 @@ function renderBranches() {
 
 function renderHeatmap() {
   const tags = DATA.top15_tags;
-  const branches = DATA.top15_branches;
+  const branches = filteredTopBranches().slice(0, 15).map(r => r.branch);
   const hmLookup = {};
-  DATA.heatmap.forEach(row => {
-    const b = row['סניף_מנורמל'];
-    hmLookup[b] = {};
-    tags.forEach(t => { hmLookup[b][t] = row[t]||0; });
+  branches.forEach(branch => {
+    hmLookup[branch] = {};
+    tags.forEach(tag => {
+      const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
+      const branchMap = (DATA.tag_branch && DATA.tag_branch[tag]) || {};
+      const branchTotal = Object.values(branchMap).reduce((s,v)=>s+v,0);
+      if (!branchTotal || !branchMap[branch]) { hmLookup[branch][tag] = 0; return; }
+      const branchRatio = branchMap[branch] / branchTotal;
+      const filteredTagCount = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v])=>s+v, 0);
+      hmLookup[branch][tag] = Math.round(filteredTagCount * branchRatio);
+    });
   });
   const maxVal = Math.max(...branches.flatMap(b=>tags.map(t=>(hmLookup[b]||{})[t]||0)),1);
   const heatClr = v => { if(!v)return'#f8f9fa'; return `rgba(227,24,55,${(0.1+0.9*v/maxVal).toFixed(2)})`; };
