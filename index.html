@@ -686,6 +686,7 @@ function filteredMonthlyCat() {
 function filteredBranchMonthly() {
   const fromM = gfFrom.substring(0,7);
   const toM   = gfTo.substring(0,7);
+  if (!DATA.branch_monthly) return [];
   return DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
 }
 
@@ -694,6 +695,7 @@ function filteredBranchTotals() {
   const out = {};
   const fromM = gfFrom.substring(0,7);
   const toM   = gfTo.substring(0,7);
+  if (!DATA.branch_monthly) return out;
   DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM).forEach(row => {
     DATA.top10_branches.forEach(b => {
       if (row[b]) out[b] = (out[b]||0) + row[b];
