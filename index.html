@@ -688,18 +688,16 @@ function filteredBranchMonthly() {
   return DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
 }
 
-// Compute branch totals from daily branch data filtered by date range
+// Compute branch totals from branch_monthly filtered by date range
 function filteredBranchTotals() {
   const out = {};
-  Object.entries(DATA.branch_daily).forEach(([branch, dayMap]) => {
-    let total = 0;
-    Object.entries(dayMap).forEach(([date, cnt]) => {
-      if (date >= gfFrom && date <= gfTo) total += cnt;
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM).forEach(row => {
+    DATA.top10_branches.forEach(b => {
+      if (row[b]) out[b] = (out[b]||0) + row[b];
     });
-    if (total > 0) out[branch] = total;
   });
-  // Also include branches from top_branches that aren't in branch_daily
-  // Use full top_branches but scale proportionally using filtered monthly
   return out;
 }
 
