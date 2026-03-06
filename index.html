@@ -564,7 +564,7 @@ let DATA = null;
 async function loadData() {
   try {
     document.getElementById('loading-overlay').style.display = 'flex';
-    const res = await fetch('https://script.google.com/macros/s/AKfycbzNY3OqQWb91zlwwtlnEN_9zotCGN4OYuKI9SOODrhVy__mQ01S2OLSX4mQwoof-zgaTQ/exec?action=data');
+    const res = await fetch('https://script.google.com/macros/s/AKfycbzSQBWlHxraK-gtUyF8slXOxkJ0SeMp2JG6Wc41kLuGaCWK1UxlVjVHcJgtCFKDCqmM/exec');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     DATA = await res.json();
     document.getElementById('loading-overlay').style.display = 'none';
@@ -586,6 +586,644 @@ async function loadData() {
   }
 }
 
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+const COLORS = ['#E31837','#006491','#f59e0b','#16a34a','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0284c7'];
+const CAT_COLORS = {'אחרי הזמנה':'#E31837','ביצוע הזמנה':'#006491','לפני הזמנה':'#f59e0b','אחר':'#adb5bd'};
+const CRIT_COLORS = {'מוצר חסר':'#f59e0b','הזמנה לא סופקה':'#dc2626','פיצה לא אפויה':'#ea580c'};
+let charts = {};
+let gfFrom = '', gfTo = '';
+
+function fmt(n) { return Number(n).toLocaleString('he-IL'); }
+function shortTag(t) {
+  // Return full tag name - no truncation
+  return t;
+}
+
+// ============================================================
+// GLOBAL DATE FILTER
+// ============================================================
+function initDateFilter() {
+  const dmin = DATA.summary.date_min;
+  const dmax = DATA.summary.date_max;
+  document.getElementById('gf-from').min = dmin;
+  document.getElementById('gf-from').max = dmax;
+  document.getElementById('gf-to').min = dmin;
+  document.getElementById('gf-to').max = dmax;
+  gfFrom = dmin; gfTo = dmax;
+  document.getElementById('gf-from').value = dmin;
+  document.getElementById('gf-to').value = dmax;
+}
+
+function setRange(mode) {
+  document.querySelectorAll('.gf-shortcut').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const dmax = DATA.summary.date_max;
+  let from, to = dmax;
+  const now = new Date(dmax);
+
+  if (mode === 'all') {
+    from = DATA.summary.date_min;
+  } else if (mode === 'month') {
+    const d = new Date(now); d.setMonth(d.getMonth()-1);
+    from = d.toISOString().split('T')[0];
+  } else if (mode === 'quarter') {
+    const d = new Date(now); d.setMonth(d.getMonth()-3);
+    from = d.toISOString().split('T')[0];
+  } else if (mode === '2026') {
+    from = '2026-01-01'; to = '2026-12-31';
+  } else if (mode === '2025') {
+    from = '2025-01-01'; to = '2025-12-31';
+  } else if (mode === '2024') {
+    from = '2024-01-01'; to = '2024-12-31';
+  }
+
+  gfFrom = from; gfTo = to;
+  document.getElementById('gf-from').value = from;
+  document.getElementById('gf-to').value = to;
+  updateRangeDisplay();
+  renderAll();
+}
+
+function applyGlobalFilter() {
+  gfFrom = document.getElementById('gf-from').value;
+  gfTo   = document.getElementById('gf-to').value;
+  document.querySelectorAll('.gf-shortcut').forEach(b => b.classList.remove('active'));
+  updateRangeDisplay();
+  renderAll();
+}
+
+function updateRangeDisplay() {
+  const from = gfFrom; const to = gfTo;
+  if (from === DATA.summary.date_min && to === DATA.summary.date_max) {
+    document.getElementById('gf-range-display').textContent = 'כל התקופה';
+  } else {
+    document.getElementById('gf-range-display').textContent = `${from} → ${to}`;
+  }
+}
+
+// ============================================================
+// FILTERED DATA HELPERS
+// ============================================================
+function filteredDaily() {
+  return DATA.daily.filter(r => r.date >= gfFrom && r.date <= gfTo);
+}
+
+function filteredMonthly() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  return DATA.monthly_total.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
+}
+
+function filteredMonthlyCat() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  return DATA.monthly_cat.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
+}
+
+function filteredBranchMonthly() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  return DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
+}
+
+// Compute branch totals from daily branch data filtered by date range
+function filteredBranchTotals() {
+  const out = {};
+  Object.entries(DATA.branch_daily).forEach(([branch, dayMap]) => {
+    let total = 0;
+    Object.entries(dayMap).forEach(([date, cnt]) => {
+      if (date >= gfFrom && date <= gfTo) total += cnt;
+    });
+    if (total > 0) out[branch] = total;
+  });
+  // Also include branches from top_branches that aren't in branch_daily
+  // Use full top_branches but scale proportionally using filtered monthly
+  return out;
+}
+
+// For full branch list (not just top 20 in branch_daily), use top_branches ratios
+function filteredTopBranches() {
+  const daily = filteredDaily();
+  const totalFiltered = daily.reduce((s,r) => s+r.total, 0);
+  const totalAll = DATA.summary.total_calls;
+  if (totalAll === 0) return DATA.top_branches;
+  // Use branch_monthly for filtered sums
+  const fromM = gfFrom.substring(0,7);
+  const toM = gfTo.substring(0,7);
+  const branchSums = {};
+  DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM).forEach(row => {
+    DATA.top10_branches.forEach(b => {
+      if (row[b] !== undefined) branchSums[b] = (branchSums[b]||0) + row[b];
+    });
+  });
+  // For branches not in branch_monthly, scale from full data
+  const result = DATA.top_branches.map(r => {
+    if (branchSums[r.branch] !== undefined) return { branch: r.branch, count: branchSums[r.branch] };
+    // scale proportionally
+    return { branch: r.branch, count: Math.round(r.count * totalFiltered / totalAll) };
+  }).filter(r => r.count > 0);
+  result.sort((a,b) => b.count - a.count);
+  return result;
+}
+
+// Filtered tag counts – approximate by scaling from full data
+function filteredTags() {
+  const daily = filteredDaily();
+  const totalFiltered = daily.reduce((s,r) => s+r.total, 0);
+  const totalAll = DATA.summary.total_calls;
+  const ratio = totalAll > 0 ? totalFiltered / totalAll : 1;
+  return DATA.top_tags.map(t => ({ tag: t.tag, count: Math.round(t.count * ratio) })).filter(t => t.count > 0);
+}
+
+// ============================================================
+// CHART HELPERS
+// ============================================================
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function makeChart(id, type, labels, datasets, opts={}) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: opts.legend !== false, position: opts.legPos||'top', labels:{font:{family:'Heebo',size:11},boxWidth:12,padding:10} },
+        tooltip: { titleFont:{family:'Heebo',size:12}, bodyFont:{family:'Heebo',size:11}, callbacks: opts.ttCb||{} }
+      },
+      scales: (type==='bar'||type==='line') ? {
+        x: { ticks:{font:{family:'Heebo',size:10}}, grid:{display:false}, ...(opts.xOpts||{}) },
+        y: { ticks:{font:{family:'Heebo',size:10},callback:v=>fmt(v)}, grid:{color:'#f1f3f5'}, beginAtZero:true, ...(opts.yOpts||{}) },
+        ...(opts.extraScales||{})
+      } : {},
+      ...(opts.extra||{})
+    }
+  });
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+  if (tab==='branches') renderBranches();
+  if (tab==='critical') renderCritical();
+  if (tab==='overview') renderOverview();
+  if (tab==='insights') renderInsights();
+}
+
+// ============================================================
+// TAB 1: OVERVIEW
+// ============================================================
+function renderOverview() {
+  const cat = document.getElementById('ov-cat').value;
+  const daily = filteredDaily();
+  const catMonthly = filteredMonthlyCat();
+  const tags = filteredTags();
+
+  const total = daily.reduce((s,r)=>s+r.total,0);
+  const days = daily.length;
+  const avg = days>0 ? Math.round(total/days) : 0;
+  const topTag = tags[0] || {tag:'—',count:0};
+
+  document.getElementById('kpi-total').textContent = fmt(total);
+  document.getElementById('kpi-avg').textContent = fmt(avg);
+  document.getElementById('kpi-top-val').textContent = fmt(topTag.count);
+  document.getElementById('kpi-top-name').textContent = shortTag(topTag.tag);
+  document.getElementById('kpi-period').textContent = gfFrom===DATA.summary.date_min && gfTo===DATA.summary.date_max ? 'כל התקופה' : `${gfFrom} → ${gfTo}`;
+  document.getElementById('kpi-days').textContent = `על פני ${days} ימים`;
+  document.getElementById('hdr-total').textContent = fmt(total);
+  document.getElementById('hdr-critical').textContent = fmt(daily.reduce((s,r)=>s+(r.critical||0),0));
+
+  const cats = ['אחרי הזמנה','ביצוע הזמנה','לפני הזמנה','אחר'];
+  const showCats = cat==='all' ? cats : [cat];
+  const labels = catMonthly.map(r=>r.yearmonth);
+
+  // Trend
+  makeChart('ov-trend','line', labels,
+    showCats.map(c => ({
+      label: c, data: catMonthly.map(r=>r[c]||0),
+      borderColor: CAT_COLORS[c], backgroundColor: CAT_COLORS[c]+'22',
+      fill:true, tension:0.4, borderWidth:2, pointRadius:2, pointHoverRadius:5,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+
+  // Donut
+  const catTotals = cats.map(c=>catMonthly.reduce((s,r)=>s+(r[c]||0),0));
+  const total2 = catTotals.reduce((a,b)=>a+b,0)||1;
+  makeChart('ov-donut','doughnut',
+    cats.map((c,i)=>`${c} (${Math.round(100*catTotals[i]/total2)}%)`),
+    [{ data:catTotals, backgroundColor:cats.map(c=>CAT_COLORS[c]), borderWidth:2, borderColor:'#fff' }],
+    { legPos:'bottom', extra:{plugins:{legend:{display:true,position:'bottom',labels:{font:{family:'Heebo',size:11},boxWidth:12}}}} }
+  );
+
+  // Tags
+  const top25 = tags.slice(0,25);
+  makeChart('ov-tags','bar',
+    top25.map(t=>shortTag(t.tag)),
+    [{ data:top25.map(t=>t.count), backgroundColor:top25.map((_,i)=>COLORS[i%COLORS.length]+'cc'), borderRadius:4 }],
+    { legend:false, ttCb:{label:ctx=>` ${fmt(ctx.parsed.y)} פניות`} }
+  );
+}
+
+// ============================================================
+// TAB 2: BRANCHES
+// ============================================================
+function renderBranches() {
+  const n = parseInt(document.getElementById('br-count').value);
+  const branchData = filteredTopBranches().slice(0, n);
+  const total = branchData.reduce((s,r)=>s+r.count,0)||1;
+
+  document.getElementById('br-bar-sub').textContent = `${n} סניפים מובילים`;
+  document.getElementById('br-table-sub').textContent = `${n} סניפים לפי נפח פניות בתקופה הנבחרת`;
+
+  // Bar
+  const showN = Math.min(15, branchData.length);
+  makeChart('br-bar','bar',
+    branchData.slice(0,showN).map(r=>r.branch),
+    [{ data:branchData.slice(0,showN).map(r=>r.count), backgroundColor:'#E31837cc', borderRadius:4, borderSkipped:false }],
+    { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
+  );
+
+  // Trend - top 5 in filtered range
+  const top5 = branchData.slice(0,5).map(r=>r.branch);
+  const bm = filteredBranchMonthly();
+  document.getElementById('br-trend-sub').textContent = `${gfFrom.substring(0,7)} → ${gfTo.substring(0,7)}`;
+  makeChart('br-trend','line',
+    bm.map(r=>r.yearmonth),
+    top5.map((b,i) => ({
+      label:b, data:bm.map(r=>r[b]||0),
+      borderColor:COLORS[i], backgroundColor:COLORS[i]+'22',
+      tension:0.4, borderWidth:2, pointRadius:2,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+
+  // Heatmap
+  renderHeatmap();
+
+  // Rank table
+  const tbody = document.querySelector('#br-rank-table tbody');
+  const maxC = branchData[0]?.count||1;
+  tbody.innerHTML = branchData.map((r,i)=>`
+    <tr>
+      <td><span class="rank-badge ${i<3?'rank-'+(i+1):'rank-n'}">${i+1}</span></td>
+      <td><strong>${r.branch}</strong></td>
+      <td>${fmt(r.count)}</td>
+      <td>${(100*r.count/total).toFixed(1)}%</td>
+      <td><div class="bar-cell"><div class="bar-outer"><div class="bar-inner" style="width:${Math.round(100*r.count/maxC)}%"></div></div></div></td>
+    </tr>`).join('');
+}
+
+function renderHeatmap() {
+  const tags = DATA.top15_tags;
+  const branches = DATA.top15_branches;
+  const hmLookup = {};
+  DATA.heatmap.forEach(row => {
+    const b = row['סניף_מנורמל'];
+    hmLookup[b] = {};
+    tags.forEach(t => { hmLookup[b][t] = row[t]||0; });
+  });
+  const maxVal = Math.max(...branches.flatMap(b=>tags.map(t=>(hmLookup[b]||{})[t]||0)),1);
+  const heatClr = v => { if(!v)return'#f8f9fa'; return `rgba(227,24,55,${(0.1+0.9*v/maxVal).toFixed(2)})`; };
+  const txtClr = v => v/maxVal>0.5?'#fff':'#212529';
+  document.getElementById('heatmap-table').innerHTML =
+    `<thead><tr><th>סניף</th>${tags.map(t=>`<th title="${t}" style="max-width:120px;white-space:normal;font-size:10px;line-height:1.3">${shortTag(t)}</th>`).join('')}</tr></thead>
+     <tbody>${branches.map(b=>`<tr><th>${b}</th>${tags.map(t=>{const v=(hmLookup[b]||{})[t]||0;return`<td class="hm-cell" style="background:${heatClr(v)};color:${txtClr(v)}">${v||''}</td>`;}).join('')}</tr>`).join('')}</tbody>`;
+}
+
+// ============================================================
+// TAB 3: CRITICAL – TAG MANAGEMENT
+// ============================================================
+const GROUP_ICONS = {
+  'הזמנה לא סופקה – שליח דומינוס':'🚚',
+  'הזמנה לא סופקה – שליח וולט':'🛵',
+  'מוצר חסר – שליח דומינוס':'📦',
+  'מוצר חסר – שליח וולט':'📦',
+  'פיצה לא אפויה':'🌡️',
+  'קבוצה מותאמת אישית':'✏️'
+};
+const GROUP_COLORS = {
+  'הזמנה לא סופקה – שליח דומינוס':'#dc2626',
+  'הזמנה לא סופקה – שליח וולט':'#ea580c',
+  'מוצר חסר – שליח דומינוס':'#0284c7',
+  'מוצר חסר – שליח וולט':'#7c3aed',
+  'פיצה לא אפויה':'#ca8a04',
+  'קבוצה מותאמת אישית':'#16a34a'
+};
+
+const DEFAULT_CRITICAL = [
+  {tag:'אחרי הזמנה - לא סופקה שליח דומינוס',         group:'הזמנה לא סופקה – שליח דומינוס'},
+  {tag:'אחרי ההזמנה- כל ההזמנה לא סופקה שליח דומינוס', group:'הזמנה לא סופקה – שליח דומינוס'},
+  {tag:'אחרי הזמנה - לא סופקה שליח וולט',            group:'הזמנה לא סופקה – שליח וולט'},
+  {tag:'אחרי ההזמנה- כל ההזמנה לא סופקה שליח וולט',  group:'הזמנה לא סופקה – שליח וולט'},
+  {tag:'אחרי הזמנה - לא סופקה שליח סנדי',            group:'הזמנה לא סופקה – שליח וולט'},
+  {tag:'אחרי הזמנה - מוצר חסר שליח דומינוס',         group:'מוצר חסר – שליח דומינוס'},
+  {tag:'אחרי הזמנה - נלווה חסר שליח דומינוס',        group:'מוצר חסר – שליח דומינוס'},
+  {tag:'אחרי הזמנה - מוצר חסר שליח וולט',            group:'מוצר חסר – שליח וולט'},
+  {tag:'אחרי הזמנה- נלווה חסר שליח וולט',            group:'מוצר חסר – שליח וולט'},
+  {tag:'אחרי הזמנה - לא אפוי',                        group:'פיצה לא אפויה'},
+  {tag:'אחרי הזמנה - לא אפוי פיצה עבה',              group:'פיצה לא אפויה'},
+  {tag:'אחרי ההזמנה- פיצה לא אפויה',                 group:'פיצה לא אפויה'},
+];
+
+let activeCriticalTags = DEFAULT_CRITICAL.map(x=>({...x}));
+
+function initTagManager() {
+  const sel = document.getElementById('new-tag-select');
+  (DATA.all_tags || DATA.top_tags.map(t=>t.tag)).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    sel.appendChild(opt);
+  });
+}
+
+function renderActiveTagsList() {
+  const container = document.getElementById('active-tags-list');
+  if (!activeCriticalTags.length) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--gray-500);font-style:italic">אין תיוגים פעילים – הוסף תיוג מהרשימה למטה</span>';
+    return;
+  }
+  container.innerHTML = activeCriticalTags.map(({tag, group}, idx) =>
+    `<span class="active-tag-chip" style="border-color:${GROUP_COLORS[group]||'#7c3aed'};background:${GROUP_COLORS[group]||'#7c3aed'}18;color:${GROUP_COLORS[group]||'#7c3aed'}">
+      <span style="font-size:10px;opacity:0.8">${GROUP_ICONS[group]||'✏️'}</span>
+      <span>${tag}</span>
+      <button class="chip-remove" onclick="removeCriticalTag(${idx})">×</button>
+    </span>`).join('');
+}
+
+function addCriticalTag() {
+  const group = document.getElementById('new-tag-group').value;
+  const tag = document.getElementById('new-tag-select').value;
+  if (!tag) return;
+  if (activeCriticalTags.some(x=>x.tag===tag)) { alert('תיוג זה כבר קיים ברשימה'); return; }
+  activeCriticalTags.push({tag, group});
+  renderActiveTagsList();
+  renderCritical();
+}
+
+function removeCriticalTag(idx) {
+  activeCriticalTags.splice(idx,1);
+  renderActiveTagsList();
+  renderCritical();
+}
+
+function resetCriticalTags() {
+  activeCriticalTags = DEFAULT_CRITICAL.map(x=>({...x}));
+  renderActiveTagsList();
+  renderCritical();
+}
+
+// Fast: use pre-aggregated tag_monthly, tag_branch, tag_weekday
+function renderCritCards(groupCounts, totalCalls) {
+  const groups = [...new Set(activeCriticalTags.map(x=>x.group))];
+  const topColors = ['#dc2626','#ea580c','#ca8a04','#7c3aed','#0891b2','#16a34a'];
+  document.getElementById('crit-cards-container').innerHTML = groups.map((g,i) => {
+    const cnt = groupCounts[g]||0;
+    const pct = totalCalls>0 ? (100*cnt/totalCalls).toFixed(1) : '0.0';
+    const col = topColors[i%topColors.length];
+    return `<div class="crit-card" style="border-top-color:${col}">
+      <div class="crit-pct">${pct}%</div>
+      <div class="crit-icon">${GROUP_ICONS[g]||'📌'}</div>
+      <div class="crit-val" style="color:${col}">${fmt(cnt)}</div>
+      <div class="crit-lbl">${g}</div>
+      <div class="crit-sub">${activeCriticalTags.filter(x=>x.group===g).length} תיוגים</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCritical() {
+  renderActiveTagsList();
+
+  const fromM = gfFrom.substring(0,7), toM = gfTo.substring(0,7);
+  const months = DATA.monthly_total.filter(r=>r.yearmonth>=fromM&&r.yearmonth<=toM).map(r=>r.yearmonth);
+  const totalCalls = DATA.monthly_total.filter(r=>r.yearmonth>=fromM&&r.yearmonth<=toM).reduce((s,r)=>s+r.total,0)||1;
+
+  // --- Group counts (sum tag_monthly over months) ---
+  const groupCounts = {};
+  activeCriticalTags.forEach(({tag, group}) => {
+    if (!groupCounts[group]) groupCounts[group] = 0;
+    const tm = DATA.tag_monthly[tag]||{};
+    months.forEach(m => { groupCounts[group] += (tm[m]||0); });
+  });
+  renderCritCards(groupCounts, totalCalls);
+
+  // --- Monthly trend (tag_monthly summed per group) ---
+  const groupNames = [...new Set(activeCriticalTags.map(x=>x.group))];
+  const trendColors = ['#dc2626','#ea580c','#ca8a04','#7c3aed','#0891b2','#16a34a'];
+  makeChart('cr-trend','line', months,
+    groupNames.map((g,i) => ({
+      label: g,
+      data: months.map(m => activeCriticalTags.filter(x=>x.group===g)
+        .reduce((s,{tag}) => s + ((DATA.tag_monthly[tag]||{})[m]||0), 0)),
+      borderColor: trendColors[i%trendColors.length],
+      backgroundColor: trendColors[i%trendColors.length]+'33',
+      fill:true, tension:0.4, borderWidth:2, pointRadius:2,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+
+  // --- Critical by branch (tag_branch summed, no date filter needed – full 2025+ data) ---
+  const branchSums = {};
+  activeCriticalTags.forEach(({tag}) => {
+    const tb = DATA.tag_branch[tag]||{};
+    Object.entries(tb).forEach(([branch, cnt]) => {
+      branchSums[branch] = (branchSums[branch]||0) + cnt;
+    });
+  });
+  const critByBranch = Object.entries(branchSums).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  makeChart('cr-branches','bar',
+    critByBranch.map(r=>r[0]),
+    [{ data:critByBranch.map(r=>r[1]), backgroundColor:critByBranch.map((_,i)=>i<3?'#dc2626cc':i<7?'#ea580ccc':'#f59e0bcc'), borderRadius:4 }],
+    { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
+  );
+
+  // --- Weekday (tag_weekday summed) ---
+  const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const wTotal = [0,0,0,0,0,0,0];
+  const wCrit  = [0,0,0,0,0,0,0];
+  filteredDaily().forEach(r=>{ const d=new Date(r.date).getDay(); wTotal[d]+=r.total||0; });
+  activeCriticalTags.forEach(({tag}) => {
+    const wd = DATA.tag_weekday[tag]||[0,0,0,0,0,0,0];
+    wd.forEach((v,i)=>{ wCrit[i]+=v; });
+  });
+  makeChart('cr-weekday','bar', DAYS, [
+    { label:'סה"כ פניות', data:wTotal, backgroundColor:'#006491aa', borderRadius:4, yAxisID:'y' },
+    { label:'תיוגים קריטיים', data:wCrit, backgroundColor:'#E31837aa', borderRadius:4, yAxisID:'y1' },
+  ], {
+    extra:{ scales:{
+      x:{ticks:{font:{family:'Heebo',size:11}},grid:{display:false}},
+      y:{ticks:{font:{family:'Heebo',size:10}},grid:{color:'#f1f3f5'},beginAtZero:true,position:'right'},
+      y1:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false},beginAtZero:true,position:'left'}
+    }}
+  });
+}
+
+// ============================================================
+// TAB 4: INSIGHTS
+// ============================================================
+function renderInsights() {
+  const sortBy = document.getElementById('ins-sort').value;
+  const dir    = document.getElementById('ins-dir').value;
+
+  // Derive months from global filter
+  const fromMonth = gfFrom.substring(0,7);
+  const toMonth   = gfTo.substring(0,7);
+  const allMonths = DATA.monthly_total
+    .map(r=>r.yearmonth)
+    .filter(m=>m>=fromMonth && m<=toMonth);
+
+  if (allMonths.length === 0) {
+    ['ins-risers','ins-fallers','ins-branch-alerts'].forEach(id=>{
+      document.getElementById(id).innerHTML = '<div style="color:var(--gray-500);font-size:13px">אין מספיק נתונים לתקופה זו</div>';
+    });
+    return;
+  }
+
+  // "Current" = last month in range
+  const curM  = allMonths[allMonths.length - 1];
+  // "Previous" = month before curM (even if outside filter range)
+  const curDate = new Date(curM + '-01');
+  curDate.setMonth(curDate.getMonth() - 1);
+  const prevM = curDate.toISOString().substring(0,7);
+  // "YoY" = same month one year ago
+  const yoyDate = new Date(curM + '-01');
+  yoyDate.setFullYear(yoyDate.getFullYear() - 1);
+  const yoyM = yoyDate.toISOString().substring(0,7);
+
+  // Update banner + legend
+  document.getElementById('ins-cur-month').textContent  = curM;
+  document.getElementById('ins-prev-month').textContent = prevM;
+  document.getElementById('ins-yoy-month').textContent  = yoyM;
+  document.getElementById('leg-cur').textContent  = curM;
+  document.getElementById('leg-prev').textContent = prevM;
+  document.getElementById('leg-yoy').textContent  = yoyM;
+
+  // Build stats per tag – only "אחרי הזמנה" tags
+  const tags = DATA.all_tags
+    .filter(tag => tag.includes('אחרי ה'))
+    .map(tag => {
+    const tm   = DATA.tag_monthly[tag] || {};
+    const cur  = tm[curM]  || 0;
+    const prev = tm[prevM] || 0;
+    const yoy  = tm[yoyM]  || 0;
+    if (cur + prev + yoy === 0) return null;
+
+    const mom_delta = cur - prev;
+    const mom_pct   = prev > 0 ? Math.round(100 * mom_delta / prev) : null;
+    const yoy_delta = cur - yoy;
+    const yoy_pct   = yoy  > 0 ? Math.round(100 * yoy_delta / yoy)  : null;
+
+    // Primary sort key = MoM delta
+    const sortVal = sortBy === 'pct'    ? Math.abs(mom_pct || 0)
+                  : sortBy === 'volume' ? cur
+                  : Math.abs(mom_delta);
+
+    const tb = DATA.tag_branch[tag] || {};
+    const topBranch = Object.entries(tb).sort((a,b)=>b[1]-a[1])[0] || null;
+
+    return { tag, cur, prev, yoy, mom_delta, mom_pct, yoy_delta, yoy_pct, sortVal, topBranch };
+  }).filter(Boolean);
+
+  // Sort & split
+  const sorted = [...tags].sort((a,b) => b.sortVal - a.sortVal);
+  const risers  = sorted.filter(t => (dir==='all'||dir==='up')   && t.mom_delta > 0).slice(0,9);
+  const fallers = sorted.filter(t => (dir==='all'||dir==='down') && t.mom_delta < 0).slice(0,9);
+
+  // Card renderer
+  function insCard(t) {
+    const yoyUnreliable = t.yoy < 20;
+    const momBadge = t.mom_pct != null
+      ? `<span class="insight-badge ${t.mom_delta>=0?'badge-up':'badge-down'}">${t.mom_delta>=0?'↑':'↓'} MoM ${Math.abs(t.mom_pct)}%</span>`
+      : `<span class="insight-badge badge-neu">MoM —</span>`;
+    const yoyBadge = t.yoy_pct != null
+      ? `<span class="insight-badge ${t.yoy_delta>=0?'badge-up':'badge-down'}" title="${yoyUnreliable?'נתון לא מייצג – בסיס נמוך':''}">
+           ${t.yoy_delta>=0?'↑':'↓'} YoY ${Math.abs(t.yoy_pct)}%${yoyUnreliable?' *':''}
+         </span>`
+      : `<span class="insight-badge badge-neu">YoY —</span>`;
+    const branchInfo = t.topBranch
+      ? `<div class="insight-branch">סניף מוביל: <strong>${t.topBranch[0]}</strong> (${fmt(t.topBranch[1])})</div>`
+      : '';
+    const numColor = t.mom_delta > 0 ? '#dc2626' : t.mom_delta < 0 ? '#16a34a' : 'var(--gray-700)';
+    return `<div class="insight-card">
+      <div class="insight-tag-name">${t.tag}</div>
+      <div class="insight-nums">
+        <span class="insight-num" style="color:${numColor}">${fmt(t.cur)}</span>
+        <div style="display:flex;flex-direction:column;gap:3px">${momBadge}${yoyBadge}</div>
+      </div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:2px">
+        חודש קודם: ${fmt(t.prev)} &nbsp;·&nbsp; אשתקד (${yoyM}): ${fmt(t.yoy)}
+      </div>
+      ${branchInfo}
+    </div>`;
+  }
+
+  document.getElementById('ins-risers-title').textContent  = `${risers.length} תיוגים שעלו לעומת החודש הקודם`;
+  document.getElementById('ins-fallers-title').textContent = `${fallers.length} תיוגים שירדו לעומת החודש הקודם`;
+  document.getElementById('ins-risers').innerHTML  = risers.length  ? risers.map(insCard).join('')  : '<div style="color:var(--gray-500);font-size:13px">אין תיוגים עם עלייה</div>';
+  document.getElementById('ins-fallers').innerHTML = fallers.length ? fallers.map(insCard).join('') : '<div style="color:var(--gray-500);font-size:13px">אין תיוגים עם ירידה</div>';
+
+  // Trend chart – top 10 by abs MoM delta
+  const top10 = [...tags].sort((a,b)=>Math.abs(b.mom_delta)-Math.abs(a.mom_delta)).slice(0,10);
+  const tColors = ['#E31837','#006491','#f59e0b','#16a34a','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0284c7'];
+  makeChart('ins-trend','line', allMonths,
+    top10.map((t,i)=>({
+      label: t.tag.length>32 ? t.tag.substring(0,32)+'…' : t.tag,
+      data: allMonths.map(m=>(DATA.tag_monthly[t.tag]||{})[m]||0),
+      borderColor: tColors[i], backgroundColor: tColors[i]+'22',
+      tension:0.4, borderWidth:2, pointRadius:2, fill:false,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+  document.getElementById('ins-trend-sub').textContent = `${fromMonth} → ${toMonth} · השינוי מוחשב לעומת ${prevM}`;
+
+  // Branch alerts – branches accumulating the most rising tags
+  const branchMap = {};
+  tags.filter(t=>t.mom_delta>0).forEach(t=>{
+    const tb = DATA.tag_branch[t.tag]||{};
+    Object.entries(tb).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([branch,cnt])=>{
+      if (!branchMap[branch]) branchMap[branch] = {branch, items:[], score:0};
+      branchMap[branch].items.push({tag:t.tag, delta:t.mom_delta, cnt});
+      branchMap[branch].score += t.mom_delta;
+    });
+  });
+  const alerts = Object.values(branchMap).sort((a,b)=>b.score-a.score).slice(0,9);
+  document.getElementById('ins-branch-alerts').innerHTML = alerts.map(b=>`
+    <div class="insight-card" style="border-right:3px solid var(--red)">
+      <div class="insight-tag-name" style="color:var(--red)">🏪 ${b.branch}</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">סה"כ עלייה: +${fmt(b.score)} פניות</div>
+      ${b.items.slice(0,3).map(t=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid var(--gray-100)">
+          <span style="color:var(--gray-900)">${t.tag.length>38?t.tag.substring(0,38)+'…':t.tag}</span>
+          <span class="insight-badge badge-up" style="font-size:10px;white-space:nowrap">+${fmt(t.delta)}</span>
+        </div>`).join('')}
+    </div>`).join('') || '<div style="color:var(--gray-500);font-size:13px">אין התראות סניף לתקופה זו</div>';
+}
+
+// ============================================================
+// RENDER ALL ACTIVE
+// ============================================================
+function renderAll() {
+  const active = document.querySelector('.tab-content.active');
+  if (!active) return;
+  const id = active.id;
+  if (id==='tab-overview') renderOverview();
+  if (id==='tab-branches') renderBranches();
+  if (id==='tab-critical') renderCritical();
+  if (id==='tab-insights') renderInsights();
+}
+
+// ============================================================
+// INIT
+// ============================================================
 loadData();
 </script>
 </body>
