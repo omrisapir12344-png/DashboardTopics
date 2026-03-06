@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>דשבורד סיבות פנייה למוקד</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --red: #E31837; --red-dark: #c01230; --blue: #006491;
+  --white: #ffffff; --gray-50: #f8f9fa; --gray-100: #f1f3f5;
+  --gray-200: #e9ecef; --gray-300: #dee2e6; --gray-500: #adb5bd;
+  --gray-700: #495057; --gray-900: #212529;
+  --crit-red: #dc2626; --crit-orange: #ea580c; --crit-yellow: #ca8a04;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --radius: 12px; --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(--gray-900); direction: rtl; }
+
+/* HEADER */
+.header {
+  background: var(--white);
+  border-bottom: 3px solid var(--red);
+  padding: 0 28px;
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.header-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 60px; max-width: 1600px; margin: 0 auto;
+}
+.header-title { display: flex; align-items: center; gap: 10px; }
+.header-title h1 { font-size: 18px; font-weight: 800; color: var(--gray-900); }
+.header-title .emoji { font-size: 26px; }
+.live-badge { background: var(--red); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+.header-stats { display: flex; gap: 20px; align-items: center; }
+.hstat { text-align: center; }
+.hstat .n { font-size: 17px; font-weight: 900; color: var(--red); line-height:1; }
+.hstat .l { font-size: 10px; color: var(--gray-500); font-weight: 500; }
+
+/* GLOBAL DATE FILTER BAR */
+.global-filter {
+  background: var(--blue);
+  padding: 0 28px;
+  position: sticky; top: 60px; z-index: 190;
+}
+.gf-inner {
+  display: flex; align-items: center; gap: 14px; height: 44px;
+  max-width: 1600px; margin: 0 auto;
+}
+.gf-label { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.5px; white-space: nowrap; }
+.gf-inner input[type="date"] {
+  font-family: 'Heebo', sans-serif; font-size: 13px; font-weight: 600;
+  padding: 5px 10px; border: none; border-radius: 6px;
+  background: rgba(255,255,255,0.15); color: #fff;
+  cursor: pointer; transition: background 0.2s; width: 140px;
+}
+.gf-inner input[type="date"]:focus { outline: none; background: rgba(255,255,255,0.25); }
+.gf-inner input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.7; cursor: pointer; }
+.gf-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.2); }
+.gf-shortcut {
+  font-family: 'Heebo', sans-serif; font-size: 12px; font-weight: 600;
+  padding: 4px 12px; border-radius: 20px; border: 1.5px solid rgba(255,255,255,0.35);
+  background: transparent; color: rgba(255,255,255,0.85); cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.gf-shortcut:hover, .gf-shortcut.active { background: rgba(255,255,255,0.2); color: #fff; border-color: #fff; }
+.gf-active-label { font-size: 11px; color: rgba(255,255,255,0.6); margin-right: auto; }
+#gf-range-display { font-weight: 700; color: #fff; }
+
+/* TABS */
+.tabs-bar { background: var(--white); border-bottom: 1px solid var(--gray-200); padding: 0 28px; position: sticky; top: 104px; z-index: 180; }
+.tabs-inner { display: flex; max-width: 1600px; margin: 0 auto; }
+.tab-btn {
+  padding: 13px 22px; font-family: 'Heebo', sans-serif; font-size: 14px; font-weight: 600;
+  color: var(--gray-500); background: none; border: none; border-bottom: 3px solid transparent;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--gray-900); }
+.tab-btn.active { color: var(--red); border-bottom-color: var(--red); }
+
+/* MAIN */
+.main { max-width: 1600px; margin: 0 auto; padding: 22px 28px; }
+.tab-content { display: none; animation: fadeUp 0.25s ease; }
+.tab-content.active { display: block; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(6px);} to { opacity:1; transform:translateY(0);} }
+
+/* FILTER ROW (per-tab extra filters) */
+.filter-row {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 18px; background: var(--white); padding: 12px 16px;
+  border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200);
+}
+.filter-row select {
+  font-family: 'Heebo', sans-serif; font-size: 13px; font-weight: 500;
+  padding: 6px 10px; border: 1.5px solid var(--gray-300); border-radius: var(--radius-sm);
+  color: var(--gray-900); background: var(--white); cursor: pointer;
+}
+.filter-row select:focus { outline: none; border-color: var(--red); }
+.fsep { width: 1px; height: 22px; background: var(--gray-200); }
+.flabel { font-size: 12px; font-weight: 700; color: var(--gray-500); white-space: nowrap; }
+.btn-rst {
+  font-family: 'Heebo', sans-serif; font-size: 12px; font-weight: 600;
+  padding: 6px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--gray-300);
+  background: var(--white); color: var(--gray-700); cursor: pointer;
+}
+.btn-rst:hover { border-color: var(--red); color: var(--red); }
+
+/* KPI CARDS */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.kpi-card {
+  background: var(--white); border-radius: var(--radius); padding: 18px;
+  box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200);
+  position: relative; overflow: hidden;
+}
+.kpi-card::before { content:''; position:absolute; top:0; right:0; width:4px; height:100%; background:var(--red); }
+.kpi-card.blue::before { background: var(--blue); }
+.kpi-card.orange::before { background: var(--crit-orange); }
+.kpi-card.green::before { background: #16a34a; }
+.kpi-icon { font-size: 20px; margin-bottom: 6px; }
+.kpi-val { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -1px; }
+.kpi-lbl { font-size: 12px; color: var(--gray-500); font-weight: 600; margin-top: 3px; }
+.kpi-sub { font-size: 11px; color: var(--gray-500); margin-top: 5px; }
+
+/* CHARTS */
+.charts-row { display: grid; gap: 14px; margin-bottom: 14px; }
+.charts-row.two-col { grid-template-columns: 2fr 1fr; }
+.charts-row.equal { grid-template-columns: 1fr 1fr; }
+.chart-card {
+  background: var(--white); border-radius: var(--radius); padding: 18px;
+  box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200);
+}
+.chart-card.full { grid-column: 1/-1; }
+.ct { font-size: 14px; font-weight: 700; color: var(--gray-900); margin-bottom: 3px; }
+.cs { font-size: 12px; color: var(--gray-500); margin-bottom: 14px; }
+
+/* BRANCH TABLE */
+.branch-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.branch-table th { background: var(--gray-50); padding: 9px 12px; text-align: right; font-weight: 700; font-size: 11px; color: var(--gray-500); border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
+.branch-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+.branch-table tr:hover td { background: var(--gray-50); }
+.rank-badge { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; font-size:10px; font-weight:800; }
+.rank-1{background:#ffd700;color:#7a5f00} .rank-2{background:#c0c0c0;color:#555} .rank-3{background:#cd7f32;color:#5a3a00} .rank-n{background:var(--gray-100);color:var(--gray-500)}
+.bar-outer { flex:1; background:var(--gray-100); border-radius:4px; height:7px; overflow:hidden; }
+.bar-inner { height:100%; border-radius:4px; background:var(--red); }
+.bar-cell { display:flex; align-items:center; gap:8px; }
+
+/* HEATMAP */
+.heatmap-wrap { overflow-x: auto; }
+.heatmap-table { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+.heatmap-table th, .heatmap-table td { padding: 5px 7px; border: 1px solid var(--gray-100); white-space: nowrap; }
+.heatmap-table thead th { background: var(--gray-50); font-weight: 700; color: var(--gray-700); }
+.heatmap-table tbody th { font-weight: 600; color: var(--gray-700); }
+.hm-cell { text-align: center; font-weight: 700; border-radius: 3px; }
+
+/* CRITICAL */
+.critical-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+.crit-card {
+  background: var(--white); border-radius: var(--radius); padding: 20px;
+  box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200); border-top: 4px solid var(--crit-red);
+  position: relative;
+}
+.crit-card.orange { border-top-color: var(--crit-orange); }
+.crit-card.yellow { border-top-color: var(--crit-yellow); }
+.crit-icon { font-size: 26px; margin-bottom: 6px; }
+.crit-val { font-size: 38px; font-weight: 900; letter-spacing:-2px; line-height:1; color: var(--crit-red); }
+.crit-card.orange .crit-val { color: var(--crit-orange); }
+.crit-card.yellow .crit-val { color: var(--crit-yellow); }
+.crit-lbl { font-size: 13px; font-weight: 700; margin-top: 4px; }
+.crit-sub { font-size: 11px; color: var(--gray-500); margin-top: 3px; }
+.crit-pct { position:absolute; top:14px; left:14px; background:var(--gray-100); border-radius:20px; padding:2px 9px; font-size:11px; font-weight:700; color:var(--gray-600); }
+
+/* TAG MANAGER */
+.tag-manager {
+  background: var(--white); border-radius: var(--radius); padding: 18px 20px;
+  box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200);
+  border-top: 3px solid var(--red); margin-bottom: 0;
+}
+.tm-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+.tm-title { font-size:14px; font-weight:800; color:var(--gray-900); }
+.tm-sub { font-size:12px; color:var(--gray-500); margin-top:2px; }
+.tm-section-title { font-size:11px; font-weight:700; color:var(--gray-500); letter-spacing:0.5px; margin-bottom:8px; text-transform:uppercase; }
+.active-tags-list { display:flex; flex-wrap:wrap; gap:7px; min-height:36px; }
+.active-tag-chip {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 10px 5px 8px; border-radius:20px; font-size:12px; font-weight:600;
+  border: 1.5px solid; cursor:default;
+}
+.active-tag-chip .chip-group { font-size:10px; opacity:0.75; margin-left:2px; }
+.active-tag-chip .chip-remove {
+  background:none; border:none; cursor:pointer; font-size:14px; line-height:1;
+  opacity:0.6; padding:0; margin-right:-2px; transition:opacity 0.15s;
+}
+.active-tag-chip .chip-remove:hover { opacity:1; }
+.chip-מוצר\ חסר { background:#fef3c7; border-color:#f59e0b; color:#92400e; }
+.chip-הזמנה\ לא\ סופקה { background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+.chip-פיצה\ לא\ אפויה { background:#ffedd5; border-color:#ea580c; color:#9a3412; }
+.chip-קבוצה\ מותאמת\ אישית { background:#ede9fe; border-color:#7c3aed; color:#4c1d95; }
+.tm-add-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn-add-tag {
+  font-family:'Heebo',sans-serif; font-size:13px; font-weight:700;
+  padding:7px 16px; border-radius:var(--radius-sm); border:none;
+  background:var(--red); color:#fff; cursor:pointer; white-space:nowrap; transition:background 0.2s;
+}
+.btn-add-tag:hover { background:var(--red-dark); }
+
+/* Chart wrapper – fixes canvas stretching */
+.chart-wrapper { position: relative; }
+.chart-wrapper canvas { display: block; }
+
+/* INSIGHTS */
+.insight-card {
+  background: var(--white); border-radius: var(--radius); padding: 16px 18px;
+  box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.insight-tag-name { font-size: 13px; font-weight: 700; color: var(--gray-900); line-height: 1.3; }
+.insight-nums { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.insight-num { font-size: 22px; font-weight: 900; line-height: 1; }
+.insight-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+.badge-up   { background: #fee2e2; color: #dc2626; }
+.badge-down { background: #dcfce7; color: #16a34a; }
+.badge-neu  { background: var(--gray-100); color: var(--gray-500); }
+.insight-branch { font-size: 11px; color: var(--gray-500); }
+.insight-branch strong { color: var(--gray-900); }
+.insights-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width:1100px) { .insights-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width:700px)  { .insights-grid { grid-template-columns: 1fr; } }
+.section-header { font-size: 14px; font-weight: 800; color: var(--gray-900); margin: 20px 0 10px; padding-bottom: 8px; border-bottom: 2px solid var(--gray-200); }
+.section-header span { color: var(--red); }
+.ins-period-label { font-size: 12px; color: var(--gray-500); font-weight: 500; margin-bottom: 4px; }
+
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background: var(--gray-100); }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius:3px; }
+
+@media (max-width:1100px) { .kpi-grid{grid-template-columns:repeat(2,1fr)} .charts-row.two-col{grid-template-columns:1fr} .critical-grid{grid-template-columns:1fr 1fr} .insights-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:700px) { .main{padding:12px} .header{padding:0 12px} .kpi-grid{grid-template-columns:1fr 1fr} .critical-grid{grid-template-columns:1fr} .header-stats{display:none} .charts-row.equal{grid-template-columns:1fr} .insights-grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="position:fixed;inset:0;background:rgba(255,255,255,0.95);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">
+  <div style="font-size:42px">🍕</div>
+  <div style="font-family:'Heebo',sans-serif;font-size:16px;font-weight:700;color:#006491">טוען נתונים...</div>
+  <div style="width:220px;height:4px;background:#e9ecef;border-radius:2px;overflow:hidden">
+    <div style="height:100%;background:#E31837;border-radius:2px;animation:loadbar 1.2s ease-in-out infinite"></div>
+  </div>
+</div>
+<style>
+@keyframes loadbar {
+  0%{width:0;margin-right:0} 50%{width:60%;margin-right:20%} 100%{width:0;margin-right:100%}
+}
+</style>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">
+      <span class="emoji">🍕</span>
+      <h1>דשבורד סיבות פנייה למוקד</h1>
+      <span class="live-badge">LIVE</span>
+    </div>
+    <div class="header-stats">
+      <div class="hstat"><div class="n" id="hdr-total">—</div><div class="l">סה"כ פניות</div></div>
+      <div class="hstat"><div class="n">68</div><div class="l">סניפים פעילים</div></div>
+      <div class="hstat"><div class="n" id="hdr-critical">—</div><div class="l">תיוגים קריטיים</div></div>
+      <div class="hstat" id="hdr-updated" style="display:none"><div class="n" style="font-size:11px;color:var(--gray-500)" id="hdr-updated-time">—</div><div class="l">עדכון אחרון</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- GLOBAL DATE FILTER -->
+<div class="global-filter">
+  <div class="gf-inner">
+    <span class="gf-label">📅 סינון תאריכים:</span>
+    <input type="date" id="gf-from" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
+    <span style="color:var(--gray-500);font-size:12px">עד</span>
+    <input type="date" id="gf-to" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
+    <span style="color:var(--gray-400);font-size:11px;margin-right:6px"></span>
+    <div class="gf-sep"></div>
+    <button class="gf-shortcut" onclick="setRange('month')">חודש אחרון</button>
+    <button class="gf-shortcut" onclick="setRange('quarter')">רבעון אחרון</button>
+    <button class="gf-shortcut" onclick="setRange('2026')">2026</button>
+    <button class="gf-shortcut" onclick="setRange('2025')">2025</button>
+    <button class="gf-shortcut" onclick="setRange('2024')">2024</button>
+    <button class="gf-shortcut active" onclick="setRange('all')">הכל</button>
+    <div class="gf-sep"></div>
+    <span class="gf-active-label">מציג: <span id="gf-range-display">כל התקופה</span></span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs-bar">
+  <div class="tabs-inner">
+    <button class="tab-btn active" onclick="switchTab('overview',this)">📊 סקירה כללית</button>
+    <button class="tab-btn" onclick="switchTab('branches',this)">🏪 השוואת סניפים</button>
+    <button class="tab-btn" onclick="switchTab('critical',this)">🚨 תיוגים קריטיים</button>
+    <button class="tab-btn" onclick="switchTab('insights',this)">💡 תובנות</button>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- ====== TAB 1: OVERVIEW ====== -->
+<div class="tab-content active" id="tab-overview">
+  <div class="filter-row">
+    <span class="flabel">קטגוריה:</span>
+    <select id="ov-cat" onchange="renderOverview()">
+      <option value="all">כל הקטגוריות</option>
+      <option value="אחרי הזמנה">אחרי הזמנה</option>
+      <option value="ביצוע הזמנה">ביצוע הזמנה</option>
+      <option value="לפני הזמנה">לפני הזמנה</option>
+      <option value="אחר">אחר</option>
+    </select>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="document.getElementById('ov-cat').value='all';renderOverview()">↺ איפוס</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-icon">📞</div>
+      <div class="kpi-val" id="kpi-total">—</div>
+      <div class="kpi-lbl">סה"כ פניות</div>
+      <div class="kpi-sub" id="kpi-period">—</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-val" id="kpi-avg">—</div>
+      <div class="kpi-lbl">ממוצע יומי</div>
+      <div class="kpi-sub" id="kpi-days">—</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-icon">⏱️</div>
+      <div class="kpi-val" id="kpi-top-val">—</div>
+      <div class="kpi-lbl">תיוג מוביל</div>
+      <div class="kpi-sub" id="kpi-top-name">—</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-icon">🏪</div>
+      <div class="kpi-val">68</div>
+      <div class="kpi-lbl">סניפים פעילים</div>
+      <div class="kpi-sub">לאחר איחוד שמות</div>
+    </div>
+  </div>
+
+  <div class="charts-row two-col">
+    <div class="chart-card">
+      <div class="ct">מגמה חודשית לפי קטגוריה</div>
+      <div class="cs" id="ov-trend-sub">פניות לפי חודש</div>
+    <div class="chart-wrapper" style="height:230px"><canvas id="ov-trend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">התפלגות קטגוריות</div>
+      <div class="cs">אחוז מסה"כ הפניות</div>
+      <div class="chart-wrapper" style="height:230px"><canvas id="ov-donut"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="ct">25 תיוגים מובילים</div>
+    <div class="cs">לפי נפח פניות בתקופה הנבחרת</div>
+    <div class="chart-wrapper" style="height:300px"><canvas id="ov-tags"></canvas></div>
+  </div>
+</div>
+
+<!-- ====== TAB 2: BRANCHES ====== -->
+<div class="tab-content" id="tab-branches">
+  <div class="filter-row">
+    <span class="flabel">מספר סניפים:</span>
+    <select id="br-count" onchange="renderBranches()">
+      <option value="15">15 מובילים</option>
+      <option value="25">25 מובילים</option>
+      <option value="68">כל הסניפים</option>
+    </select>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="document.getElementById('br-count').value='15';renderBranches()">↺ איפוס</button>
+  </div>
+
+  <div class="charts-row equal">
+    <div class="chart-card">
+      <div class="ct">סניפים לפי נפח פניות</div>
+      <div class="cs" id="br-bar-sub">15 סניפים מובילים</div>
+      <div class="chart-wrapper" style="height:380px"><canvas id="br-bar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">מגמה חודשית – 5 סניפים מובילים</div>
+      <div class="cs" id="br-trend-sub">לפי תקופה נבחרת</div>
+      <div class="chart-wrapper" style="height:380px"><canvas id="br-trend"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="ct">מפת חום – סניפים × תיוגים</div>
+    <div class="cs">15 סניפים מובילים × 15 תיוגים מובילים</div>
+    <div class="heatmap-wrap"><table class="heatmap-table" id="heatmap-table"></table></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="ct">טבלת דירוג סניפים</div>
+    <div class="cs" id="br-table-sub">לפי נפח פניות בתקופה הנבחרת</div>
+    <table class="branch-table" id="br-rank-table">
+      <thead><tr>
+        <th>דירוג</th><th>שם סניף</th><th>פניות</th><th>% מסה"כ</th><th>גרף</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ====== TAB 3: CRITICAL ====== -->
+<div class="tab-content" id="tab-critical">
+
+  <!-- TAG MANAGER -->
+  <div class="tag-manager">
+    <div class="tm-header">
+      <div>
+        <div class="tm-title">⚙️ ניהול תיוגים קריטיים</div>
+        <div class="tm-sub">בחר אילו תיוגים ייחשבו קריטיים – הגרפים יתעדכנו אוטומטית</div>
+      </div>
+      <button class="btn-rst" onclick="resetCriticalTags()">↺ החזר ברירת מחדל</button>
+    </div>
+
+    <!-- Active critical tags -->
+    <div class="tm-section-title">תיוגים קריטיים פעילים</div>
+    <div id="active-tags-list" class="active-tags-list"></div>
+
+    <!-- Add tag -->
+    <div class="tm-section-title" style="margin-top:14px">הוסף תיוג</div>
+    <div class="tm-add-row">
+      <select id="new-tag-group" style="font-family:'Heebo',sans-serif;font-size:13px;padding:7px 10px;border:1.5px solid var(--gray-300);border-radius:var(--radius-sm);background:var(--white);">
+        <option value="הזמנה לא סופקה – שליח דומינוס">🚚 הזמנה לא סופקה – שליח דומינוס</option>
+        <option value="הזמנה לא סופקה – שליח וולט">🛵 הזמנה לא סופקה – שליח וולט</option>
+        <option value="מוצר חסר – שליח דומינוס">📦 מוצר חסר – שליח דומינוס</option>
+        <option value="מוצר חסר – שליח וולט">📦 מוצר חסר – שליח וולט</option>
+        <option value="פיצה לא אפויה">🌡️ פיצה לא אפויה</option>
+        <option value="קבוצה מותאמת אישית">✏️ קבוצה מותאמת אישית</option>
+      </select>
+      <select id="new-tag-select" style="font-family:'Heebo',sans-serif;font-size:13px;padding:7px 10px;border:1.5px solid var(--gray-300);border-radius:var(--radius-sm);background:var(--white);flex:1;min-width:0;">
+        <option value="">— בחר תיוג —</option>
+      </select>
+      <button class="btn-add-tag" onclick="addCriticalTag()">+ הוסף</button>
+    </div>
+  </div>
+
+  <!-- KPI cards (dynamic) -->
+  <div id="crit-cards-container" class="critical-grid" style="margin-top:16px"></div>
+
+  <div class="charts-row equal">
+    <div class="chart-card">
+      <div class="ct">מגמה חודשית – תיוגים קריטיים</div>
+      <div class="cs">לפי קבוצות ותקופה נבחרת</div>
+      <div class="chart-wrapper" style="height:260px"><canvas id="cr-trend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">תיוגים קריטיים לפי סניף</div>
+      <div class="cs">20 סניפים מובילים</div>
+      <div class="chart-wrapper" style="height:260px"><canvas id="cr-branches"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="ct">התפלגות שבועית – תיוגים קריטיים</div>
+    <div class="cs">סה"כ פניות קריטיות לפי יום בשבוע</div>
+    <div class="chart-wrapper" style="height:200px"><canvas id="cr-weekday"></canvas></div>
+  </div>
+</div>
+
+<!-- ====== TAB 4: INSIGHTS ====== -->
+<div class="tab-content" id="tab-insights">
+
+  <div class="filter-row">
+    <span class="flabel">מיון:</span>
+    <select id="ins-sort" onchange="renderInsights()">
+      <option value="abs">שינוי מוחלט (גדול → קטן)</option>
+      <option value="pct">שינוי אחוזי (גדול → קטן)</option>
+      <option value="volume">נפח נוכחי</option>
+    </select>
+    <div class="fsep"></div>
+    <span class="flabel">סנן:</span>
+    <select id="ins-dir" onchange="renderInsights()">
+      <option value="all">הכל</option>
+      <option value="up">עלייה בלבד ↑</option>
+      <option value="down">ירידה בלבד ↓</option>
+    </select>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="document.getElementById('ins-sort').value='abs';document.getElementById('ins-dir').value='all';renderInsights()">↺ איפוס</button>
+  </div>
+
+  <!-- Period info banner -->
+  <div style="background:var(--blue);color:#fff;border-radius:var(--radius);padding:12px 18px;margin-bottom:12px;font-size:13px;font-weight:600;display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+    <span>📅 חודש נוכחי: <span id="ins-cur-month" style="font-size:15px"></span></span>
+    <span style="opacity:0.8">⟷ חודש קודם: <span id="ins-prev-month"></span></span>
+    <span style="opacity:0.8">📆 אותו חודש אשתקד: <span id="ins-yoy-month"></span></span>
+    <span style="opacity:0.5;font-size:11px;margin-right:auto">• נקבע לפי טווח התאריכים הגלובלי</span>
+  </div>
+
+  <!-- Legend -->
+  <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+    <div style="font-size:12px;font-weight:800;color:var(--gray-500);letter-spacing:0.5px;align-self:center;">📖 מקרא:</div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-size:12px;color:var(--gray-700)"><span style="font-size:18px;font-weight:900;color:#dc2626;vertical-align:middle">277</span> &nbsp;= מספר הפניות ב<strong id="leg-cur"></strong></div>
+    </div>
+    <div style="width:1px;background:var(--gray-200);align-self:stretch;"></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:12px;color:var(--gray-700);display:flex;align-items:center;gap:8px">
+        <span class="insight-badge badge-up" style="font-size:11px">↑ MoM 15%</span>
+        = שינוי לעומת <strong id="leg-prev"></strong> (חודש קודם)
+      </div>
+      <div style="font-size:12px;color:var(--gray-700);display:flex;align-items:center;gap:8px">
+        <span class="insight-badge badge-up" style="font-size:11px">↑ YoY 13%</span>
+        = שינוי לעומת <strong id="leg-yoy"></strong> (אותו חודש שנה שעברה)
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:2px">⚠️ YoY עם * = נתון לא מייצג (פחות מ-20 פניות בשנה שעברה)</div>
+    </div>
+    <div style="width:1px;background:var(--gray-200);align-self:stretch;"></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:12px;color:var(--gray-700);display:flex;align-items:center;gap:8px">
+        <span class="insight-badge badge-down" style="font-size:11px">↓ ירידה</span>
+        = ירידה = <span style="color:#16a34a;font-weight:700">טוב</span>
+      </div>
+      <div style="font-size:12px;color:var(--gray-700);display:flex;align-items:center;gap:8px">
+        <span class="insight-badge badge-up" style="font-size:11px">↑ עלייה</span>
+        = עלייה = <span style="color:#dc2626;font-weight:700">דורש תשומת לב</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top risers -->
+  <div class="section-header">📈 עלייה משמעותית – <span id="ins-risers-title"></span></div>
+  <div class="insights-grid" id="ins-risers"></div>
+
+  <!-- Top fallers -->
+  <div class="section-header">📉 ירידה משמעותית – <span id="ins-fallers-title"></span></div>
+  <div class="insights-grid" id="ins-fallers"></div>
+
+  <!-- Trend chart -->
+  <div class="chart-card" style="margin-bottom:16px">
+    <div class="ct">מגמה חודשית – 10 תיוגים עם השינוי הגדול ביותר</div>
+    <div class="cs" id="ins-trend-sub"></div>
+    <div class="chart-wrapper" style="height:280px"><canvas id="ins-trend"></canvas></div>
+  </div>
+
+  <!-- Branch focus -->
+  <div class="section-header">🏪 סניפים שצריך לשים לב אליהם</div>
+  <div id="ins-branch-alerts" class="insights-grid"></div>
+
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+// ── נתונים מ-GitHub ──────────────────────────────────────────
+let DATA = null;
+
+async function loadData() {
+  try {
+    document.getElementById('loading-overlay').style.display = 'flex';
+    const res = await fetch('https://script.google.com/macros/s/AKfycbz7puJ6YqjJsUbQfDEi7Ew_cKOihW79lUpdxODDY57lWTXiy3Q0iKsMt8HGnBmwH80a/exec');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    DATA = await res.json();
+    document.getElementById('loading-overlay').style.display = 'none';
+    initDateFilter();
+    initTagManager();
+    if (DATA.summary && DATA.summary.last_updated) {
+      document.getElementById('hdr-updated-time').textContent = DATA.summary.last_updated;
+      document.getElementById('hdr-updated').style.display = 'block';
+    }
+    renderOverview();
+  } catch(e) {
+    document.getElementById('loading-overlay').innerHTML =
+      `<div style="text-align:center;color:#dc2626;font-family:Heebo,sans-serif">
+        <div style="font-size:36px;margin-bottom:10px">⚠️</div>
+        <div style="font-weight:700;font-size:15px">שגיאה בטעינת הנתונים</div>
+        <div style="font-size:12px;margin-top:6px;color:#666">${e.message}</div>
+        <button onclick="loadData()" style="margin-top:14px;padding:8px 20px;background:#006491;color:#fff;border:none;border-radius:8px;font-family:Heebo,sans-serif;font-size:13px;font-weight:700;cursor:pointer">🔄 נסה שוב</button>
+      </div>`;
+  }
+}
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+const COLORS = ['#E31837','#006491','#f59e0b','#16a34a','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0284c7'];
+const CAT_COLORS = {'אחרי הזמנה':'#E31837','ביצוע הזמנה':'#006491','לפני הזמנה':'#f59e0b','אחר':'#adb5bd'};
+const CRIT_COLORS = {'מוצר חסר':'#f59e0b','הזמנה לא סופקה':'#dc2626','פיצה לא אפויה':'#ea580c'};
+let charts = {};
+let gfFrom = '', gfTo = '';
+
+function fmt(n) { return Number(n).toLocaleString('he-IL'); }
+function shortTag(t) {
+  // Return full tag name - no truncation
+  return t;
+}
+
+// ============================================================
+// GLOBAL DATE FILTER
+// ============================================================
+function initDateFilter() {
+  const dmin = DATA.summary.date_min;
+  const dmax = DATA.summary.date_max;
+  document.getElementById('gf-from').min = dmin;
+  document.getElementById('gf-from').max = dmax;
+  document.getElementById('gf-to').min = dmin;
+  document.getElementById('gf-to').max = dmax;
+  gfFrom = dmin; gfTo = dmax;
+  document.getElementById('gf-from').value = dmin;
+  document.getElementById('gf-to').value = dmax;
+}
+
+function setRange(mode) {
+  document.querySelectorAll('.gf-shortcut').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const dmax = DATA.summary.date_max;
+  let from, to = dmax;
+  const now = new Date(dmax);
+
+  if (mode === 'all') {
+    from = DATA.summary.date_min;
+  } else if (mode === 'month') {
+    const d = new Date(now); d.setMonth(d.getMonth()-1);
+    from = d.toISOString().split('T')[0];
+  } else if (mode === 'quarter') {
+    const d = new Date(now); d.setMonth(d.getMonth()-3);
+    from = d.toISOString().split('T')[0];
+  } else if (mode === '2026') {
+    from = '2026-01-01'; to = '2026-12-31';
+  } else if (mode === '2025') {
+    from = '2025-01-01'; to = '2025-12-31';
+  } else if (mode === '2024') {
+    from = '2024-01-01'; to = '2024-12-31';
+  }
+
+  gfFrom = from; gfTo = to;
+  document.getElementById('gf-from').value = from;
+  document.getElementById('gf-to').value = to;
+  updateRangeDisplay();
+  renderAll();
+}
+
+function applyGlobalFilter() {
+  gfFrom = document.getElementById('gf-from').value;
+  gfTo   = document.getElementById('gf-to').value;
+  document.querySelectorAll('.gf-shortcut').forEach(b => b.classList.remove('active'));
+  updateRangeDisplay();
+  renderAll();
+}
+
+function updateRangeDisplay() {
+  const from = gfFrom; const to = gfTo;
+  if (from === DATA.summary.date_min && to === DATA.summary.date_max) {
+    document.getElementById('gf-range-display').textContent = 'כל התקופה';
+  } else {
+    document.getElementById('gf-range-display').textContent = `${from} → ${to}`;
+  }
+}
+
+// ============================================================
+// FILTERED DATA HELPERS
+// ============================================================
+function filteredDaily() {
+  return DATA.daily.filter(r => r.date >= gfFrom && r.date <= gfTo);
+}
+
+function filteredMonthly() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  return DATA.monthly_total.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
+}
+
+function filteredMonthlyCat() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  return DATA.monthly_cat.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
+}
+
+function filteredBranchMonthly() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  if (!DATA.branch_monthly) return [];
+  return DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM);
+}
+
+// Compute branch totals from branch_monthly filtered by date range
+function filteredBranchTotals() {
+  const out = {};
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  if (!DATA.branch_monthly) return out;
+  DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM).forEach(row => {
+    DATA.top10_branches.forEach(b => {
+      if (row[b]) out[b] = (out[b]||0) + row[b];
+    });
+  });
+  return out;
+}
+
+// For full branch list (not just top 20 in branch_daily), use top_branches ratios
+function filteredTopBranches() {
+  const fromM = gfFrom.substring(0,7);
+  const toM   = gfTo.substring(0,7);
+  // Use tag_daily if available for day-accurate branch counts
+  if (DATA.tag_daily) {
+    const branchSums = {};
+    Object.entries(DATA.tag_branch || {}).forEach(([tag, branchMap]) => {
+      // Count days in range for this tag
+      const dayMap = DATA.tag_daily[tag] || {};
+      const tagTotal = Object.values(dayMap).reduce((s,v)=>s+v,0);
+      const tagFiltered = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v])=>s+v, 0);
+      const ratio = tagTotal > 0 ? tagFiltered/tagTotal : 0;
+      Object.entries(branchMap).forEach(([branch, cnt]) => {
+        branchSums[branch] = (branchSums[branch]||0) + Math.round(cnt * ratio);
+      });
+    });
+    return Object.entries(branchSums)
+      .filter(([,c]) => c > 0)
+      .sort((a,b) => b[1]-a[1])
+      .map(([branch, count]) => ({branch, count}));
+  }
+  // Fallback: monthly
+  const fromMf = gfFrom.substring(0,7), toMf = gfTo.substring(0,7);
+  const weightedBranch = {};
+  Object.entries(DATA.tag_branch || {}).forEach(([tag, branchMap]) => {
+    const mMap = DATA.tag_monthly[tag] || {};
+    const tot = Object.values(mMap).reduce((s,v)=>s+v,0);
+    const fil = Object.entries(mMap).filter(([m])=>m>=fromMf&&m<=toMf).reduce((s,[,v])=>s+v,0);
+    const ratio = tot>0 ? fil/tot : 0;
+    Object.entries(branchMap).forEach(([branch,cnt]) => {
+      weightedBranch[branch] = (weightedBranch[branch]||0) + Math.round(cnt*ratio);
+    });
+  });
+  return Object.entries(weightedBranch).filter(([,c])=>c>0).sort((a,b)=>b[1]-a[1]).map(([branch,count])=>({branch,count}));
+}
+
+// Filtered tag counts – day-accurate using tag_daily
+function filteredTags() {
+  if (DATA.tag_daily) {
+    const result = {};
+    Object.entries(DATA.tag_daily).forEach(([tag, dayMap]) => {
+      const cnt = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v]) => s+v, 0);
+      if (cnt > 0) result[tag] = cnt;
+    });
+    return Object.entries(result).sort((a,b)=>b[1]-a[1]).map(([tag,count])=>({tag,count}));
+  }
+  // Fallback: monthly
+  const fromM = gfFrom.substring(0,7), toM = gfTo.substring(0,7);
+  const result = {};
+  Object.entries(DATA.tag_monthly||{}).forEach(([tag,monthMap]) => {
+    const cnt = Object.entries(monthMap).filter(([m])=>m>=fromM&&m<=toM).reduce((s,[,v])=>s+v,0);
+    if (cnt>0) result[tag]=cnt;
+  });
+  return Object.entries(result).sort((a,b)=>b[1]-a[1]).map(([tag,count])=>({tag,count}));
+}
+
+// ============================================================
+// CHART HELPERS
+// ============================================================
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function makeChart(id, type, labels, datasets, opts={}) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: opts.legend !== false, position: opts.legPos||'top', labels:{font:{family:'Heebo',size:11},boxWidth:12,padding:10} },
+        tooltip: { titleFont:{family:'Heebo',size:12}, bodyFont:{family:'Heebo',size:11}, callbacks: opts.ttCb||{} }
+      },
+      scales: (type==='bar'||type==='line') ? {
+        x: { ticks:{font:{family:'Heebo',size:10}}, grid:{display:false}, ...(opts.xOpts||{}) },
+        y: { ticks:{font:{family:'Heebo',size:10},callback:v=>fmt(v)}, grid:{color:'#f1f3f5'}, beginAtZero:true, ...(opts.yOpts||{}) },
+        ...(opts.extraScales||{})
+      } : {},
+      ...(opts.extra||{})
+    }
+  });
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+  if (tab==='branches') renderBranches();
+  if (tab==='critical') renderCritical();
+  if (tab==='overview') renderOverview();
+  if (tab==='insights') renderInsights();
+}
+
+// ============================================================
+// TAB 1: OVERVIEW
+// ============================================================
+function renderOverview() {
+  const cat = document.getElementById('ov-cat').value;
+  const daily = filteredDaily();
+  const catMonthly = filteredMonthlyCat();
+  const tags = filteredTags();
+
+  const total = daily.reduce((s,r)=>s+r.total,0);
+  const days = daily.length;
+  const avg = days>0 ? Math.round(total/days) : 0;
+  const topTag = tags[0] || {tag:'—',count:0};
+
+  document.getElementById('kpi-total').textContent = fmt(total);
+  document.getElementById('kpi-avg').textContent = fmt(avg);
+  document.getElementById('kpi-top-val').textContent = fmt(topTag.count);
+  document.getElementById('kpi-top-name').textContent = shortTag(topTag.tag);
+  document.getElementById('kpi-period').textContent = gfFrom===DATA.summary.date_min && gfTo===DATA.summary.date_max ? 'כל התקופה' : `${gfFrom} → ${gfTo}`;
+  document.getElementById('kpi-days').textContent = `על פני ${days} ימים`;
+  document.getElementById('hdr-total').textContent = fmt(total);
+  document.getElementById('hdr-critical').textContent = fmt(daily.reduce((s,r)=>s+(r.critical||0),0));
+
+  const cats = ['אחרי הזמנה','ביצוע הזמנה','לפני הזמנה','אחר'];
+  const showCats = cat==='all' ? cats : [cat];
+  const labels = catMonthly.map(r=>r.yearmonth);
+
+  // Trend
+  makeChart('ov-trend','line', labels,
+    showCats.map(c => ({
+      label: c, data: catMonthly.map(r=>r[c]||0),
+      borderColor: CAT_COLORS[c], backgroundColor: CAT_COLORS[c]+'22',
+      fill:true, tension:0.4, borderWidth:2, pointRadius:2, pointHoverRadius:5,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+
+  // Donut
+  const catTotals = cats.map(c=>catMonthly.reduce((s,r)=>s+(r[c]||0),0));
+  const total2 = catTotals.reduce((a,b)=>a+b,0)||1;
+  makeChart('ov-donut','doughnut',
+    cats.map((c,i)=>`${c} (${Math.round(100*catTotals[i]/total2)}%)`),
+    [{ data:catTotals, backgroundColor:cats.map(c=>CAT_COLORS[c]), borderWidth:2, borderColor:'#fff' }],
+    { legPos:'bottom', extra:{plugins:{legend:{display:true,position:'bottom',labels:{font:{family:'Heebo',size:11},boxWidth:12}}}} }
+  );
+
+  // Tags
+  const top25 = tags.slice(0,25);
+  makeChart('ov-tags','bar',
+    top25.map(t=>shortTag(t.tag)),
+    [{ data:top25.map(t=>t.count), backgroundColor:top25.map((_,i)=>COLORS[i%COLORS.length]+'cc'), borderRadius:4 }],
+    { legend:false, ttCb:{label:ctx=>` ${fmt(ctx.parsed.y)} פניות`} }
+  );
+}
+
+// ============================================================
+// TAB 2: BRANCHES
+// ============================================================
+function renderBranches() {
+  const n = parseInt(document.getElementById('br-count').value);
+  const branchData = filteredTopBranches().slice(0, n);
+  const total = branchData.reduce((s,r)=>s+r.count,0)||1;
+
+  document.getElementById('br-bar-sub').textContent = `${n} סניפים מובילים`;
+  document.getElementById('br-table-sub').textContent = `${n} סניפים לפי נפח פניות בתקופה הנבחרת`;
+
+  // Bar
+  const showN = Math.min(15, branchData.length);
+  const sliceData = branchData.slice(0, showN);
+  makeChart('br-bar','bar',
+    sliceData.map(r=>`${r.branch} (${(100*r.count/total).toFixed(1)}%)`),
+    [{ data:sliceData.map(r=>r.count), backgroundColor:'#E31837cc', borderRadius:4, borderSkipped:false }],
+    { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
+  );
+
+  // Trend - top 5 in filtered range
+  const top5 = branchData.slice(0,5).map(r=>r.branch);
+  const bm = filteredBranchMonthly();
+  document.getElementById('br-trend-sub').textContent = `${gfFrom.substring(0,7)} → ${gfTo.substring(0,7)}`;
+  makeChart('br-trend','line',
+    bm.map(r=>r.yearmonth),
+    top5.map((b,i) => ({
+      label:b, data:bm.map(r=>r[b]||0),
+      borderColor:COLORS[i], backgroundColor:COLORS[i]+'22',
+      tension:0.4, borderWidth:2, pointRadius:2,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+
+  // Heatmap
+  renderHeatmap();
+
+  // Rank table
+  const tbody = document.querySelector('#br-rank-table tbody');
+  const maxC = branchData[0]?.count||1;
+  tbody.innerHTML = branchData.map((r,i)=>`
+    <tr>
+      <td><span class="rank-badge ${i<3?'rank-'+(i+1):'rank-n'}">${i+1}</span></td>
+      <td><strong>${r.branch}</strong></td>
+      <td>${fmt(r.count)}</td>
+      <td>${(100*r.count/total).toFixed(1)}%</td>
+      <td><div class="bar-cell"><div class="bar-outer"><div class="bar-inner" style="width:${Math.round(100*r.count/maxC)}%"></div></div></div></td>
+    </tr>`).join('');
+}
+
+function renderHeatmap() {
+  const tags = DATA.top15_tags;
+  const branches = filteredTopBranches().slice(0, 15).map(r => r.branch);
+  const hmLookup = {};
+  branches.forEach(branch => {
+    hmLookup[branch] = {};
+    tags.forEach(tag => {
+      const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
+      const branchMap = (DATA.tag_branch && DATA.tag_branch[tag]) || {};
+      const branchTotal = Object.values(branchMap).reduce((s,v)=>s+v,0);
+      if (!branchTotal || !branchMap[branch]) { hmLookup[branch][tag] = 0; return; }
+      const branchRatio = branchMap[branch] / branchTotal;
+      const filteredTagCount = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v])=>s+v, 0);
+      hmLookup[branch][tag] = Math.round(filteredTagCount * branchRatio);
+    });
+  });
+  const maxVal = Math.max(...branches.flatMap(b=>tags.map(t=>(hmLookup[b]||{})[t]||0)),1);
+  const heatClr = v => { if(!v)return'#f8f9fa'; return `rgba(227,24,55,${(0.1+0.9*v/maxVal).toFixed(2)})`; };
+  const txtClr = v => v/maxVal>0.5?'#fff':'#212529';
+  document.getElementById('heatmap-table').innerHTML =
+    `<thead><tr><th>סניף</th>${tags.map(t=>`<th title="${t}" style="max-width:120px;white-space:normal;font-size:10px;line-height:1.3">${shortTag(t)}</th>`).join('')}</tr></thead>
+     <tbody>${branches.map(b=>`<tr><th>${b}</th>${tags.map(t=>{const v=(hmLookup[b]||{})[t]||0;return`<td class="hm-cell" style="background:${heatClr(v)};color:${txtClr(v)}">${v||''}</td>`;}).join('')}</tr>`).join('')}</tbody>`;
+}
+
+// ============================================================
+// TAB 3: CRITICAL – TAG MANAGEMENT
+// ============================================================
+const GROUP_ICONS = {
+  'הזמנה לא סופקה – שליח דומינוס':'🚚',
+  'הזמנה לא סופקה – שליח וולט':'🛵',
+  'מוצר חסר – שליח דומינוס':'📦',
+  'מוצר חסר – שליח וולט':'📦',
+  'פיצה לא אפויה':'🌡️',
+  'קבוצה מותאמת אישית':'✏️'
+};
+const GROUP_COLORS = {
+  'הזמנה לא סופקה – שליח דומינוס':'#dc2626',
+  'הזמנה לא סופקה – שליח וולט':'#ea580c',
+  'מוצר חסר – שליח דומינוס':'#0284c7',
+  'מוצר חסר – שליח וולט':'#7c3aed',
+  'פיצה לא אפויה':'#ca8a04',
+  'קבוצה מותאמת אישית':'#16a34a'
+};
+
+const DEFAULT_CRITICAL = [
+  {tag:'אחרי הזמנה - לא סופקה שליח דומינוס',         group:'הזמנה לא סופקה – שליח דומינוס'},
+  {tag:'אחרי ההזמנה- כל ההזמנה לא סופקה שליח דומינוס', group:'הזמנה לא סופקה – שליח דומינוס'},
+  {tag:'אחרי הזמנה - לא סופקה שליח וולט',            group:'הזמנה לא סופקה – שליח וולט'},
+  {tag:'אחרי ההזמנה- כל ההזמנה לא סופקה שליח וולט',  group:'הזמנה לא סופקה – שליח וולט'},
+  {tag:'אחרי הזמנה - לא סופקה שליח סנדי',            group:'הזמנה לא סופקה – שליח וולט'},
+  {tag:'אחרי הזמנה - מוצר חסר שליח דומינוס',         group:'מוצר חסר – שליח דומינוס'},
+  {tag:'אחרי הזמנה - נלווה חסר שליח דומינוס',        group:'מוצר חסר – שליח דומינוס'},
+  {tag:'אחרי הזמנה - מוצר חסר שליח וולט',            group:'מוצר חסר – שליח וולט'},
+  {tag:'אחרי הזמנה- נלווה חסר שליח וולט',            group:'מוצר חסר – שליח וולט'},
+  {tag:'אחרי הזמנה - לא אפוי',                        group:'פיצה לא אפויה'},
+  {tag:'אחרי הזמנה - לא אפוי פיצה עבה',              group:'פיצה לא אפויה'},
+  {tag:'אחרי ההזמנה- פיצה לא אפויה',                 group:'פיצה לא אפויה'},
+];
+
+let activeCriticalTags = DEFAULT_CRITICAL.map(x=>({...x}));
+
+function initTagManager() {
+  const sel = document.getElementById('new-tag-select');
+  (DATA.all_tags || DATA.top_tags.map(t=>t.tag)).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    sel.appendChild(opt);
+  });
+}
+
+function renderActiveTagsList() {
+  const container = document.getElementById('active-tags-list');
+  if (!activeCriticalTags.length) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--gray-500);font-style:italic">אין תיוגים פעילים – הוסף תיוג מהרשימה למטה</span>';
+    return;
+  }
+  container.innerHTML = activeCriticalTags.map(({tag, group}, idx) =>
+    `<span class="active-tag-chip" style="border-color:${GROUP_COLORS[group]||'#7c3aed'};background:${GROUP_COLORS[group]||'#7c3aed'}18;color:${GROUP_COLORS[group]||'#7c3aed'}">
+      <span style="font-size:10px;opacity:0.8">${GROUP_ICONS[group]||'✏️'}</span>
+      <span>${tag}</span>
+      <button class="chip-remove" onclick="removeCriticalTag(${idx})">×</button>
+    </span>`).join('');
+}
+
+function addCriticalTag() {
+  const group = document.getElementById('new-tag-group').value;
+  const tag = document.getElementById('new-tag-select').value;
+  if (!tag) return;
+  if (activeCriticalTags.some(x=>x.tag===tag)) { alert('תיוג זה כבר קיים ברשימה'); return; }
+  activeCriticalTags.push({tag, group});
+  renderActiveTagsList();
+  renderCritical();
+}
+
+function removeCriticalTag(idx) {
+  activeCriticalTags.splice(idx,1);
+  renderActiveTagsList();
+  renderCritical();
+}
+
+function resetCriticalTags() {
+  activeCriticalTags = DEFAULT_CRITICAL.map(x=>({...x}));
+  renderActiveTagsList();
+  renderCritical();
+}
+
+// Fast: use pre-aggregated tag_monthly, tag_branch, tag_weekday
+function renderCritCards(groupCounts, totalCalls) {
+  const groups = [...new Set(activeCriticalTags.map(x=>x.group))];
+  const topColors = ['#dc2626','#ea580c','#ca8a04','#7c3aed','#0891b2','#16a34a'];
+  document.getElementById('crit-cards-container').innerHTML = groups.map((g,i) => {
+    const cnt = groupCounts[g]||0;
+    const pct = totalCalls>0 ? (100*cnt/totalCalls).toFixed(1) : '0.0';
+    const col = topColors[i%topColors.length];
+    return `<div class="crit-card" style="border-top-color:${col}">
+      <div class="crit-pct">${pct}%</div>
+      <div class="crit-icon">${GROUP_ICONS[g]||'📌'}</div>
+      <div class="crit-val" style="color:${col}">${fmt(cnt)}</div>
+      <div class="crit-lbl">${g}</div>
+      <div class="crit-sub">${activeCriticalTags.filter(x=>x.group===g).length} תיוגים</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCritical() {
+  renderActiveTagsList();
+
+  const fromM = gfFrom.substring(0,7), toM = gfTo.substring(0,7);
+  const months = DATA.monthly_total.filter(r=>r.yearmonth>=fromM&&r.yearmonth<=toM).map(r=>r.yearmonth);
+  const totalCalls = filteredDaily().reduce((s,r)=>s+r.total,0)||1;
+
+  // --- Group counts – use tag_daily if available for day accuracy ---
+  const groupCounts = {};
+  activeCriticalTags.forEach(({tag, group}) => {
+    if (!groupCounts[group]) groupCounts[group] = 0;
+    if (DATA.tag_daily && DATA.tag_daily[tag]) {
+      const cnt = Object.entries(DATA.tag_daily[tag])
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v]) => s+v, 0);
+      groupCounts[group] += cnt;
+    } else {
+      const tm = DATA.tag_monthly[tag]||{};
+      months.forEach(m => { groupCounts[group] += (tm[m]||0); });
+    }
+  });
+  renderCritCards(groupCounts, totalCalls);
+
+  // --- Monthly trend (tag_monthly summed per group) ---
+  const groupNames = [...new Set(activeCriticalTags.map(x=>x.group))];
+  const trendColors = ['#dc2626','#ea580c','#ca8a04','#7c3aed','#0891b2','#16a34a'];
+  makeChart('cr-trend','line', months,
+    groupNames.map((g,i) => ({
+      label: g,
+      data: months.map(m => activeCriticalTags.filter(x=>x.group===g)
+        .reduce((s,{tag}) => s + ((DATA.tag_monthly[tag]||{})[m]||0), 0)),
+      borderColor: trendColors[i%trendColors.length],
+      backgroundColor: trendColors[i%trendColors.length]+'33',
+      fill:true, tension:0.4, borderWidth:2, pointRadius:2,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+
+  // --- Critical by branch (tag_branch summed, no date filter needed – full 2025+ data) ---
+  const branchSums = {};
+  activeCriticalTags.forEach(({tag}) => {
+    const tb = DATA.tag_branch[tag]||{};
+    Object.entries(tb).forEach(([branch, cnt]) => {
+      branchSums[branch] = (branchSums[branch]||0) + cnt;
+    });
+  });
+  const critByBranch = Object.entries(branchSums).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  makeChart('cr-branches','bar',
+    critByBranch.map(r=>r[0]),
+    [{ data:critByBranch.map(r=>r[1]), backgroundColor:critByBranch.map((_,i)=>i<3?'#dc2626cc':i<7?'#ea580ccc':'#f59e0bcc'), borderRadius:4 }],
+    { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
+  );
+
+  // --- Weekday (tag_weekday summed) ---
+  const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const wTotal = [0,0,0,0,0,0,0];
+  const wCrit  = [0,0,0,0,0,0,0];
+  filteredDaily().forEach(r=>{ const d=new Date(r.date).getDay(); wTotal[d]+=r.total||0; });
+  activeCriticalTags.forEach(({tag}) => {
+    const wd = DATA.tag_weekday[tag]||[0,0,0,0,0,0,0];
+    wd.forEach((v,i)=>{ wCrit[i]+=v; });
+  });
+  makeChart('cr-weekday','bar', DAYS, [
+    { label:'סה"כ פניות', data:wTotal, backgroundColor:'#006491aa', borderRadius:4, yAxisID:'y' },
+    { label:'תיוגים קריטיים', data:wCrit, backgroundColor:'#E31837aa', borderRadius:4, yAxisID:'y1' },
+  ], {
+    extra:{ scales:{
+      x:{ticks:{font:{family:'Heebo',size:11}},grid:{display:false}},
+      y:{ticks:{font:{family:'Heebo',size:10}},grid:{color:'#f1f3f5'},beginAtZero:true,position:'right'},
+      y1:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false},beginAtZero:true,position:'left'}
+    }}
+  });
+}
+
+// ============================================================
+// TAB 4: INSIGHTS
+// ============================================================
+function renderInsights() {
+  const sortBy = document.getElementById('ins-sort').value;
+  const dir    = document.getElementById('ins-dir').value;
+
+  // Derive months from global filter
+  const fromMonth = gfFrom.substring(0,7);
+  const toMonth   = gfTo.substring(0,7);
+  const allMonths = DATA.monthly_total
+    .map(r=>r.yearmonth)
+    .filter(m=>m>=fromMonth && m<=toMonth);
+
+  if (allMonths.length === 0) {
+    ['ins-risers','ins-fallers','ins-branch-alerts'].forEach(id=>{
+      document.getElementById(id).innerHTML = '<div style="color:var(--gray-500);font-size:13px">אין מספיק נתונים לתקופה זו</div>';
+    });
+    return;
+  }
+
+  // "Current" = last month in range
+  const curM  = allMonths[allMonths.length - 1];
+  // "Previous" = month before curM (even if outside filter range)
+  const curDate = new Date(curM + '-01');
+  curDate.setMonth(curDate.getMonth() - 1);
+  const prevM = curDate.toISOString().substring(0,7);
+  // "YoY" = same month one year ago
+  const yoyDate = new Date(curM + '-01');
+  yoyDate.setFullYear(yoyDate.getFullYear() - 1);
+  const yoyM = yoyDate.toISOString().substring(0,7);
+
+  // Update banner + legend
+  document.getElementById('ins-cur-month').textContent  = curM;
+  document.getElementById('ins-prev-month').textContent = prevM;
+  document.getElementById('ins-yoy-month').textContent  = yoyM;
+  document.getElementById('leg-cur').textContent  = curM;
+  document.getElementById('leg-prev').textContent = prevM;
+  document.getElementById('leg-yoy').textContent  = yoyM;
+
+  // Build stats per tag – only "אחרי הזמנה" tags
+  const tags = DATA.all_tags
+    .filter(tag => tag.includes('אחרי ה'))
+    .map(tag => {
+    const tm   = DATA.tag_monthly[tag] || {};
+    const cur  = tm[curM]  || 0;
+    const prev = tm[prevM] || 0;
+    const yoy  = tm[yoyM]  || 0;
+    if (cur + prev + yoy === 0) return null;
+
+    const mom_delta = cur - prev;
+    const mom_pct   = prev > 0 ? Math.round(100 * mom_delta / prev) : null;
+    const yoy_delta = cur - yoy;
+    const yoy_pct   = yoy  > 0 ? Math.round(100 * yoy_delta / yoy)  : null;
+
+    // Primary sort key = MoM delta
+    const sortVal = sortBy === 'pct'    ? Math.abs(mom_pct || 0)
+                  : sortBy === 'volume' ? cur
+                  : Math.abs(mom_delta);
+
+    const tb = DATA.tag_branch[tag] || {};
+    const topBranch = Object.entries(tb).sort((a,b)=>b[1]-a[1])[0] || null;
+
+    return { tag, cur, prev, yoy, mom_delta, mom_pct, yoy_delta, yoy_pct, sortVal, topBranch };
+  }).filter(Boolean);
+
+  // Sort & split
+  const sorted = [...tags].sort((a,b) => b.sortVal - a.sortVal);
+  const risers  = sorted.filter(t => (dir==='all'||dir==='up')   && t.mom_delta > 0).slice(0,9);
+  const fallers = sorted.filter(t => (dir==='all'||dir==='down') && t.mom_delta < 0).slice(0,9);
+
+  // Card renderer
+  function insCard(t) {
+    const yoyUnreliable = t.yoy < 20;
+    const momBadge = t.mom_pct != null
+      ? `<span class="insight-badge ${t.mom_delta>=0?'badge-up':'badge-down'}">${t.mom_delta>=0?'↑':'↓'} MoM ${Math.abs(t.mom_pct)}%</span>`
+      : `<span class="insight-badge badge-neu">MoM —</span>`;
+    const yoyBadge = t.yoy_pct != null
+      ? `<span class="insight-badge ${t.yoy_delta>=0?'badge-up':'badge-down'}" title="${yoyUnreliable?'נתון לא מייצג – בסיס נמוך':''}">
+           ${t.yoy_delta>=0?'↑':'↓'} YoY ${Math.abs(t.yoy_pct)}%${yoyUnreliable?' *':''}
+         </span>`
+      : `<span class="insight-badge badge-neu">YoY —</span>`;
+    const branchInfo = t.topBranch
+      ? `<div class="insight-branch">סניף מוביל: <strong>${t.topBranch[0]}</strong> (${fmt(t.topBranch[1])})</div>`
+      : '';
+    const numColor = t.mom_delta > 0 ? '#dc2626' : t.mom_delta < 0 ? '#16a34a' : 'var(--gray-700)';
+    return `<div class="insight-card">
+      <div class="insight-tag-name">${t.tag}</div>
+      <div class="insight-nums">
+        <span class="insight-num" style="color:${numColor}">${fmt(t.cur)}</span>
+        <div style="display:flex;flex-direction:column;gap:3px">${momBadge}${yoyBadge}</div>
+      </div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:2px">
+        חודש קודם: ${fmt(t.prev)} &nbsp;·&nbsp; אשתקד (${yoyM}): ${fmt(t.yoy)}
+      </div>
+      ${branchInfo}
+    </div>`;
+  }
+
+  document.getElementById('ins-risers-title').textContent  = `${risers.length} תיוגים שעלו לעומת החודש הקודם`;
+  document.getElementById('ins-fallers-title').textContent = `${fallers.length} תיוגים שירדו לעומת החודש הקודם`;
+  document.getElementById('ins-risers').innerHTML  = risers.length  ? risers.map(insCard).join('')  : '<div style="color:var(--gray-500);font-size:13px">אין תיוגים עם עלייה</div>';
+  document.getElementById('ins-fallers').innerHTML = fallers.length ? fallers.map(insCard).join('') : '<div style="color:var(--gray-500);font-size:13px">אין תיוגים עם ירידה</div>';
+
+  // Trend chart – top 10 by abs MoM delta
+  const top10 = [...tags].sort((a,b)=>Math.abs(b.mom_delta)-Math.abs(a.mom_delta)).slice(0,10);
+  const tColors = ['#E31837','#006491','#f59e0b','#16a34a','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0284c7'];
+  makeChart('ins-trend','line', allMonths,
+    top10.map((t,i)=>({
+      label: t.tag.length>32 ? t.tag.substring(0,32)+'…' : t.tag,
+      data: allMonths.map(m=>(DATA.tag_monthly[t.tag]||{})[m]||0),
+      borderColor: tColors[i], backgroundColor: tColors[i]+'22',
+      tension:0.4, borderWidth:2, pointRadius:2, fill:false,
+    })),
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+  );
+  document.getElementById('ins-trend-sub').textContent = `${fromMonth} → ${toMonth} · השינוי מוחשב לעומת ${prevM}`;
+
+  // Branch alerts – branches accumulating the most rising tags
+  const branchMap = {};
+  tags.filter(t=>t.mom_delta>0).forEach(t=>{
+    const tb = DATA.tag_branch[t.tag]||{};
+    Object.entries(tb).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([branch,cnt])=>{
+      if (!branchMap[branch]) branchMap[branch] = {branch, items:[], score:0};
+      branchMap[branch].items.push({tag:t.tag, delta:t.mom_delta, cnt});
+      branchMap[branch].score += t.mom_delta;
+    });
+  });
+  const alerts = Object.values(branchMap).sort((a,b)=>b.score-a.score).slice(0,9);
+  document.getElementById('ins-branch-alerts').innerHTML = alerts.map(b=>`
+    <div class="insight-card" style="border-right:3px solid var(--red)">
+      <div class="insight-tag-name" style="color:var(--red)">🏪 ${b.branch}</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">סה"כ עלייה: +${fmt(b.score)} פניות</div>
+      ${b.items.slice(0,3).map(t=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid var(--gray-100)">
+          <span style="color:var(--gray-900)">${t.tag.length>38?t.tag.substring(0,38)+'…':t.tag}</span>
+          <span class="insight-badge badge-up" style="font-size:10px;white-space:nowrap">+${fmt(t.delta)}</span>
+        </div>`).join('')}
+    </div>`).join('') || '<div style="color:var(--gray-500);font-size:13px">אין התראות סניף לתקופה זו</div>';
+}
+
+// ============================================================
+// RENDER ALL ACTIVE
+// ============================================================
+function renderAll() {
+  const active = document.querySelector('.tab-content.active');
+  if (!active) return;
+  const id = active.id;
+  if (id==='tab-overview') renderOverview();
+  if (id==='tab-branches') renderBranches();
+  if (id==='tab-critical') renderCritical();
+  if (id==='tab-insights') renderInsights();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadData();
+</script>
+</body>
+</html>
