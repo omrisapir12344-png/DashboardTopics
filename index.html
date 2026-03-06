@@ -281,8 +281,9 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
   <div class="gf-inner">
     <span class="gf-label">📅 סינון תאריכים:</span>
     <input type="date" id="gf-from" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
-    <span style="color:rgba(255,255,255,0.5);font-size:12px;">עד</span>
+    <span style="color:var(--gray-500);font-size:12px">עד</span>
     <input type="date" id="gf-to" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
+    <span style="color:var(--gray-400);font-size:11px;margin-right:6px"></span>
     <div class="gf-sep"></div>
     <button class="gf-shortcut" onclick="setRange('month')">חודש אחרון</button>
     <button class="gf-shortcut" onclick="setRange('quarter')">רבעון אחרון</button>
@@ -703,36 +704,63 @@ function filteredBranchTotals() {
 
 // For full branch list (not just top 20 in branch_daily), use top_branches ratios
 function filteredTopBranches() {
-  const daily = filteredDaily();
-  const totalFiltered = daily.reduce((s,r) => s+r.total, 0);
-  const totalAll = DATA.summary.total_calls;
-  if (totalAll === 0) return DATA.top_branches;
-  // Use branch_monthly for filtered sums
   const fromM = gfFrom.substring(0,7);
-  const toM = gfTo.substring(0,7);
-  const branchSums = {};
-  DATA.branch_monthly.filter(r => r.yearmonth >= fromM && r.yearmonth <= toM).forEach(row => {
-    DATA.top10_branches.forEach(b => {
-      if (row[b] !== undefined) branchSums[b] = (branchSums[b]||0) + row[b];
+  const toM   = gfTo.substring(0,7);
+  // Use tag_daily if available for day-accurate branch counts
+  if (DATA.tag_daily) {
+    const branchSums = {};
+    Object.entries(DATA.tag_branch || {}).forEach(([tag, branchMap]) => {
+      // Count days in range for this tag
+      const dayMap = DATA.tag_daily[tag] || {};
+      const tagTotal = Object.values(dayMap).reduce((s,v)=>s+v,0);
+      const tagFiltered = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v])=>s+v, 0);
+      const ratio = tagTotal > 0 ? tagFiltered/tagTotal : 0;
+      Object.entries(branchMap).forEach(([branch, cnt]) => {
+        branchSums[branch] = (branchSums[branch]||0) + Math.round(cnt * ratio);
+      });
+    });
+    return Object.entries(branchSums)
+      .filter(([,c]) => c > 0)
+      .sort((a,b) => b[1]-a[1])
+      .map(([branch, count]) => ({branch, count}));
+  }
+  // Fallback: monthly
+  const fromMf = gfFrom.substring(0,7), toMf = gfTo.substring(0,7);
+  const weightedBranch = {};
+  Object.entries(DATA.tag_branch || {}).forEach(([tag, branchMap]) => {
+    const mMap = DATA.tag_monthly[tag] || {};
+    const tot = Object.values(mMap).reduce((s,v)=>s+v,0);
+    const fil = Object.entries(mMap).filter(([m])=>m>=fromMf&&m<=toMf).reduce((s,[,v])=>s+v,0);
+    const ratio = tot>0 ? fil/tot : 0;
+    Object.entries(branchMap).forEach(([branch,cnt]) => {
+      weightedBranch[branch] = (weightedBranch[branch]||0) + Math.round(cnt*ratio);
     });
   });
-  // For branches not in branch_monthly, scale from full data
-  const result = DATA.top_branches.map(r => {
-    if (branchSums[r.branch] !== undefined) return { branch: r.branch, count: branchSums[r.branch] };
-    // scale proportionally
-    return { branch: r.branch, count: Math.round(r.count * totalFiltered / totalAll) };
-  }).filter(r => r.count > 0);
-  result.sort((a,b) => b.count - a.count);
-  return result;
+  return Object.entries(weightedBranch).filter(([,c])=>c>0).sort((a,b)=>b[1]-a[1]).map(([branch,count])=>({branch,count}));
 }
 
-// Filtered tag counts – approximate by scaling from full data
+// Filtered tag counts – day-accurate using tag_daily
 function filteredTags() {
-  const daily = filteredDaily();
-  const totalFiltered = daily.reduce((s,r) => s+r.total, 0);
-  const totalAll = DATA.summary.total_calls;
-  const ratio = totalAll > 0 ? totalFiltered / totalAll : 1;
-  return DATA.top_tags.map(t => ({ tag: t.tag, count: Math.round(t.count * ratio) })).filter(t => t.count > 0);
+  if (DATA.tag_daily) {
+    const result = {};
+    Object.entries(DATA.tag_daily).forEach(([tag, dayMap]) => {
+      const cnt = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v]) => s+v, 0);
+      if (cnt > 0) result[tag] = cnt;
+    });
+    return Object.entries(result).sort((a,b)=>b[1]-a[1]).map(([tag,count])=>({tag,count}));
+  }
+  // Fallback: monthly
+  const fromM = gfFrom.substring(0,7), toM = gfTo.substring(0,7);
+  const result = {};
+  Object.entries(DATA.tag_monthly||{}).forEach(([tag,monthMap]) => {
+    const cnt = Object.entries(monthMap).filter(([m])=>m>=fromM&&m<=toM).reduce((s,[,v])=>s+v,0);
+    if (cnt>0) result[tag]=cnt;
+  });
+  return Object.entries(result).sort((a,b)=>b[1]-a[1]).map(([tag,count])=>({tag,count}));
 }
 
 // ============================================================
@@ -1003,14 +1031,21 @@ function renderCritical() {
 
   const fromM = gfFrom.substring(0,7), toM = gfTo.substring(0,7);
   const months = DATA.monthly_total.filter(r=>r.yearmonth>=fromM&&r.yearmonth<=toM).map(r=>r.yearmonth);
-  const totalCalls = DATA.monthly_total.filter(r=>r.yearmonth>=fromM&&r.yearmonth<=toM).reduce((s,r)=>s+r.total,0)||1;
+  const totalCalls = filteredDaily().reduce((s,r)=>s+r.total,0)||1;
 
-  // --- Group counts (sum tag_monthly over months) ---
+  // --- Group counts – use tag_daily if available for day accuracy ---
   const groupCounts = {};
   activeCriticalTags.forEach(({tag, group}) => {
     if (!groupCounts[group]) groupCounts[group] = 0;
-    const tm = DATA.tag_monthly[tag]||{};
-    months.forEach(m => { groupCounts[group] += (tm[m]||0); });
+    if (DATA.tag_daily && DATA.tag_daily[tag]) {
+      const cnt = Object.entries(DATA.tag_daily[tag])
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v]) => s+v, 0);
+      groupCounts[group] += cnt;
+    } else {
+      const tm = DATA.tag_monthly[tag]||{};
+      months.forEach(m => { groupCounts[group] += (tm[m]||0); });
+    }
   });
   renderCritCards(groupCounts, totalCalls);
 
