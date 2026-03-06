@@ -565,7 +565,7 @@ let DATA = null;
 async function loadData() {
   try {
     document.getElementById('loading-overlay').style.display = 'flex';
-    const res = await fetch('https://script.google.com/macros/s/AKfycbyVnhh_IEVZ_DLonuV2CLY01farGvHFZvCHM37ljk8CSx7baPZ2jvvZpSFJW4fDRDnc/exec');
+    const res = await fetch('https://script.google.com/macros/s/AKfycbw19iCalkBZ0K8Q6gNKxDn0kVSwDbLUZhQ-PnG-ZDwTJfCQaW9q4i74IgCvtvVFoLkS/exec');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     DATA = await res.json();
     document.getElementById('loading-overlay').style.display = 'none';
