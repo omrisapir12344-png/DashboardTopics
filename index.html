@@ -280,9 +280,9 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 <div class="global-filter">
   <div class="gf-inner">
     <span class="gf-label">📅 סינון תאריכים:</span>
-    <input type="date" id="gf-from" onchange="applyGlobalFilter()" />
+    <input type="date" id="gf-from" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
     <span style="color:rgba(255,255,255,0.5);font-size:12px;">עד</span>
-    <input type="date" id="gf-to" onchange="applyGlobalFilter()" />
+    <input type="date" id="gf-to" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
     <div class="gf-sep"></div>
     <button class="gf-shortcut" onclick="setRange('month')">חודש אחרון</button>
     <button class="gf-shortcut" onclick="setRange('quarter')">רבעון אחרון</button>
@@ -558,7 +558,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 // ============================================================
 // DATA
 // ============================================================
-// ── טעינת נתונים מ-Apps Script ──────────────────────────────
+// ── נתונים מ-GitHub ──────────────────────────────────────────
 let DATA = null;
 
 async function loadData() {
