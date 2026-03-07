@@ -495,9 +495,8 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 
   <!-- Period info banner -->
   <div style="background:var(--blue);color:#fff;border-radius:var(--radius);padding:12px 18px;margin-bottom:12px;font-size:13px;font-weight:600;display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
-    <span>📅 חודש נוכחי: <span id="ins-cur-month" style="font-size:15px"></span></span>
-    <span style="opacity:0.8">⟷ חודש קודם: <span id="ins-prev-month"></span></span>
-    <span style="opacity:0.8">📆 אותו חודש אשתקד: <span id="ins-yoy-month"></span></span>
+    <span>📅 תקופה נוכחית: <span id="ins-cur-month" style="font-size:15px"></span></span>
+    <span style="opacity:0.8">⟷ השוואה לעומת: <span id="ins-prev-month"></span></span>
     <span style="opacity:0.5;font-size:11px;margin-right:auto">• נקבע לפי טווח התאריכים הגלובלי</span>
   </div>
 
@@ -510,14 +509,10 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     <div style="width:1px;background:var(--gray-200);align-self:stretch;"></div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <div style="font-size:12px;color:var(--gray-700);display:flex;align-items:center;gap:8px">
-        <span class="insight-badge badge-up" style="font-size:11px">↑ MoM 15%</span>
-        = שינוי לעומת <strong id="leg-prev"></strong> (חודש קודם)
+        <span class="insight-badge badge-up" style="font-size:11px">↑ 15%</span>
+        = שינוי לעומת <strong id="leg-prev"></strong>
       </div>
-      <div style="font-size:12px;color:var(--gray-700);display:flex;align-items:center;gap:8px">
-        <span class="insight-badge badge-up" style="font-size:11px">↑ YoY 13%</span>
-        = שינוי לעומת <strong id="leg-yoy"></strong> (אותו חודש שנה שעברה)
-      </div>
-      <div style="font-size:11px;color:var(--gray-400);margin-top:2px">⚠️ YoY עם * = נתון לא מייצג (פחות מ-20 פניות בשנה שעברה)</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:2px" id="leg-yoy"></div>
     </div>
     <div style="width:1px;background:var(--gray-200);align-self:stretch;"></div>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -1141,125 +1136,140 @@ function renderInsights() {
   const sortBy = document.getElementById('ins-sort').value;
   const dir    = document.getElementById('ins-dir').value;
 
-  // Derive months from global filter
-  const fromMonth = gfFrom.substring(0,7);
-  const toMonth   = gfTo.substring(0,7);
-  const allMonths = DATA.monthly_total
-    .map(r=>r.yearmonth)
-    .filter(m=>m>=fromMonth && m<=toMonth);
+  // ── חישוב טווח נוכחי ותקופת השוואה דינמית ──
+  const fromDate = new Date(gfFrom);
+  const toDate   = new Date(gfTo);
+  const diffDays = Math.round((toDate - fromDate) / 86400000) + 1;
 
-  if (allMonths.length === 0) {
+  // בחר תקופת השוואה לפי אורך הטווח
+  let compLabel, prevFrom, prevTo;
+  if (diffDays <= 1) {
+    // יום בודד → שבוע אחורה
+    const d = new Date(fromDate); d.setDate(d.getDate()-7);
+    prevFrom = prevTo = d.toISOString().substring(0,10);
+    compLabel = 'לפני שבוע';
+  } else if (diffDays <= 7) {
+    // שבוע → שבוע קודם
+    const pTo = new Date(fromDate); pTo.setDate(pTo.getDate()-1);
+    const pFrom = new Date(pTo); pFrom.setDate(pFrom.getDate()-(diffDays-1));
+    prevFrom = pFrom.toISOString().substring(0,10);
+    prevTo   = pTo.toISOString().substring(0,10);
+    compLabel = 'השבוע הקודם';
+  } else if (diffDays <= 31) {
+    // חודש → חודש קודם
+    const pTo = new Date(fromDate); pTo.setDate(pTo.getDate()-1);
+    const pFrom = new Date(pTo); pFrom.setDate(pFrom.getDate()-(diffDays-1));
+    prevFrom = pFrom.toISOString().substring(0,10);
+    prevTo   = pTo.toISOString().substring(0,10);
+    compLabel = 'התקופה הקודמת';
+  } else {
+    // חודש+ → אותו טווח שנה שעברה
+    const pFrom = new Date(fromDate); pFrom.setFullYear(pFrom.getFullYear()-1);
+    const pTo   = new Date(toDate);   pTo.setFullYear(pTo.getFullYear()-1);
+    prevFrom = pFrom.toISOString().substring(0,10);
+    prevTo   = pTo.toISOString().substring(0,10);
+    compLabel = 'אותה תקופה אשתקד';
+  }
+
+  // פונקציה לספור tag בטווח ימים
+  function countTagInRange(tag, from, to) {
+    const dayMap = DATA.tag_daily[tag] || {};
+    return Object.entries(dayMap)
+      .filter(([d]) => d >= from && d <= to)
+      .reduce((s,[,v]) => s+v, 0);
+  }
+
+  // Update banner
+  document.getElementById('ins-cur-month').textContent  = diffDays === 1 ? gfFrom : `${gfFrom} → ${gfTo}`;
+  document.getElementById('ins-prev-month').textContent = compLabel;
+  // ins-yoy-month removed
+  document.getElementById('leg-cur').textContent  = diffDays === 1 ? gfFrom : `${gfFrom}–${gfTo}`;
+  document.getElementById('leg-prev').textContent = compLabel;
+  document.getElementById('leg-yoy').textContent = `📊 משווה לתקופה: ${prevFrom} עד ${prevTo} (${compLabel})`;
+
+  // בנה stats לכל תיוג
+  const tags = DATA.all_tags
+    .filter(tag => tag.includes('אחרי ה'))
+    .map(tag => {
+      const cur  = countTagInRange(tag, gfFrom, gfTo);
+      const prev = countTagInRange(tag, prevFrom, prevTo);
+      if (cur + prev === 0) return null;
+
+      const delta   = cur - prev;
+      const pct     = prev > 0 ? Math.round(100 * delta / prev) : null;
+
+      const sortVal = sortBy === 'pct'    ? Math.abs(pct || 0)
+                    : sortBy === 'volume' ? cur
+                    : Math.abs(delta);
+
+      const tb = DATA.tag_branch[tag] || {};
+      const topBranch = Object.entries(tb).sort((a,b)=>b[1]-a[1])[0] || null;
+
+      return { tag, cur, prev, delta, pct, sortVal, topBranch };
+    }).filter(Boolean);
+
+  if (tags.length === 0) {
     ['ins-risers','ins-fallers','ins-branch-alerts'].forEach(id=>{
       document.getElementById(id).innerHTML = '<div style="color:var(--gray-500);font-size:13px">אין מספיק נתונים לתקופה זו</div>';
     });
     return;
   }
 
-  // "Current" = last month in range
-  const curM  = allMonths[allMonths.length - 1];
-  // "Previous" = month before curM (even if outside filter range)
-  const curDate = new Date(curM + '-01');
-  curDate.setMonth(curDate.getMonth() - 1);
-  const prevM = curDate.toISOString().substring(0,7);
-  // "YoY" = same month one year ago
-  const yoyDate = new Date(curM + '-01');
-  yoyDate.setFullYear(yoyDate.getFullYear() - 1);
-  const yoyM = yoyDate.toISOString().substring(0,7);
+  const sorted  = [...tags].sort((a,b) => b.sortVal - a.sortVal);
+  const risers  = sorted.filter(t => (dir==='all'||dir==='up')   && t.delta > 0).slice(0,9);
+  const fallers = sorted.filter(t => (dir==='all'||dir==='down') && t.delta < 0).slice(0,9);
 
-  // Update banner + legend
-  document.getElementById('ins-cur-month').textContent  = curM;
-  document.getElementById('ins-prev-month').textContent = prevM;
-  document.getElementById('ins-yoy-month').textContent  = yoyM;
-  document.getElementById('leg-cur').textContent  = curM;
-  document.getElementById('leg-prev').textContent = prevM;
-  document.getElementById('leg-yoy').textContent  = yoyM;
-
-  // Build stats per tag – only "אחרי הזמנה" tags
-  const tags = DATA.all_tags
-    .filter(tag => tag.includes('אחרי ה'))
-    .map(tag => {
-    const tm   = DATA.tag_monthly[tag] || {};
-    const cur  = tm[curM]  || 0;
-    const prev = tm[prevM] || 0;
-    const yoy  = tm[yoyM]  || 0;
-    if (cur + prev + yoy === 0) return null;
-
-    const mom_delta = cur - prev;
-    const mom_pct   = prev > 0 ? Math.round(100 * mom_delta / prev) : null;
-    const yoy_delta = cur - yoy;
-    const yoy_pct   = yoy  > 0 ? Math.round(100 * yoy_delta / yoy)  : null;
-
-    // Primary sort key = MoM delta
-    const sortVal = sortBy === 'pct'    ? Math.abs(mom_pct || 0)
-                  : sortBy === 'volume' ? cur
-                  : Math.abs(mom_delta);
-
-    const tb = DATA.tag_branch[tag] || {};
-    const topBranch = Object.entries(tb).sort((a,b)=>b[1]-a[1])[0] || null;
-
-    return { tag, cur, prev, yoy, mom_delta, mom_pct, yoy_delta, yoy_pct, sortVal, topBranch };
-  }).filter(Boolean);
-
-  // Sort & split
-  const sorted = [...tags].sort((a,b) => b.sortVal - a.sortVal);
-  const risers  = sorted.filter(t => (dir==='all'||dir==='up')   && t.mom_delta > 0).slice(0,9);
-  const fallers = sorted.filter(t => (dir==='all'||dir==='down') && t.mom_delta < 0).slice(0,9);
-
-  // Card renderer
   function insCard(t) {
-    const yoyUnreliable = t.yoy < 20;
-    const momBadge = t.mom_pct != null
-      ? `<span class="insight-badge ${t.mom_delta>=0?'badge-up':'badge-down'}">${t.mom_delta>=0?'↑':'↓'} MoM ${Math.abs(t.mom_pct)}%</span>`
-      : `<span class="insight-badge badge-neu">MoM —</span>`;
-    const yoyBadge = t.yoy_pct != null
-      ? `<span class="insight-badge ${t.yoy_delta>=0?'badge-up':'badge-down'}" title="${yoyUnreliable?'נתון לא מייצג – בסיס נמוך':''}">
-           ${t.yoy_delta>=0?'↑':'↓'} YoY ${Math.abs(t.yoy_pct)}%${yoyUnreliable?' *':''}
-         </span>`
-      : `<span class="insight-badge badge-neu">YoY —</span>`;
+    const badge = t.pct != null
+      ? `<span class="insight-badge ${t.delta>=0?'badge-up':'badge-down'}">${t.delta>=0?'↑':'↓'} ${Math.abs(t.pct)}%</span>`
+      : `<span class="insight-badge badge-neu">—</span>`;
     const branchInfo = t.topBranch
       ? `<div class="insight-branch">סניף מוביל: <strong>${t.topBranch[0]}</strong> (${fmt(t.topBranch[1])})</div>`
       : '';
-    const numColor = t.mom_delta > 0 ? '#dc2626' : t.mom_delta < 0 ? '#16a34a' : 'var(--gray-700)';
+    const numColor = t.delta > 0 ? '#dc2626' : t.delta < 0 ? '#16a34a' : 'var(--gray-700)';
     return `<div class="insight-card">
       <div class="insight-tag-name">${t.tag}</div>
       <div class="insight-nums">
         <span class="insight-num" style="color:${numColor}">${fmt(t.cur)}</span>
-        <div style="display:flex;flex-direction:column;gap:3px">${momBadge}${yoyBadge}</div>
+        <div style="display:flex;flex-direction:column;gap:3px">${badge}</div>
       </div>
       <div style="font-size:11px;color:var(--gray-500);margin-top:2px">
-        חודש קודם: ${fmt(t.prev)} &nbsp;·&nbsp; אשתקד (${yoyM}): ${fmt(t.yoy)}
+        ${compLabel}: ${fmt(t.prev)} &nbsp;·&nbsp; שינוי: ${t.delta>=0?'+':''}${fmt(t.delta)}
       </div>
       ${branchInfo}
     </div>`;
   }
 
-  document.getElementById('ins-risers-title').textContent  = `${risers.length} תיוגים שעלו לעומת החודש הקודם`;
-  document.getElementById('ins-fallers-title').textContent = `${fallers.length} תיוגים שירדו לעומת החודש הקודם`;
+  document.getElementById('ins-risers-title').textContent  = `${risers.length} תיוגים שעלו לעומת ${compLabel}`;
+  document.getElementById('ins-fallers-title').textContent = `${fallers.length} תיוגים שירדו לעומת ${compLabel}`;
   document.getElementById('ins-risers').innerHTML  = risers.length  ? risers.map(insCard).join('')  : '<div style="color:var(--gray-500);font-size:13px">אין תיוגים עם עלייה</div>';
   document.getElementById('ins-fallers').innerHTML = fallers.length ? fallers.map(insCard).join('') : '<div style="color:var(--gray-500);font-size:13px">אין תיוגים עם ירידה</div>';
 
-  // Trend chart – top 10 by abs MoM delta
-  const top10 = [...tags].sort((a,b)=>Math.abs(b.mom_delta)-Math.abs(a.mom_delta)).slice(0,10);
+  // Trend chart – top 10 by abs delta
+  const fromMonth = gfFrom.substring(0,7);
+  const toMonth   = gfTo.substring(0,7);
+  const allMonths = DATA.monthly_total.map(r=>r.yearmonth).filter(m=>m>=fromMonth&&m<=toMonth);
+  const top10 = [...tags].sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta)).slice(0,10);
   const tColors = ['#E31837','#006491','#f59e0b','#16a34a','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0284c7'];
-  makeChart('ins-trend','line', allMonths,
+  makeChart('ins-trend','line', allMonths.length > 1 ? allMonths : [gfFrom],
     top10.map((t,i)=>({
       label: t.tag.length>32 ? t.tag.substring(0,32)+'…' : t.tag,
-      data: allMonths.map(m=>(DATA.tag_monthly[t.tag]||{})[m]||0),
+      data: allMonths.length > 1 ? allMonths.map(m=>(DATA.tag_monthly[t.tag]||{})[m]||0) : [t.cur],
       borderColor: tColors[i], backgroundColor: tColors[i]+'22',
       tension:0.4, borderWidth:2, pointRadius:2, fill:false,
     })),
     { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
   );
-  document.getElementById('ins-trend-sub').textContent = `${fromMonth} → ${toMonth} · השינוי מוחשב לעומת ${prevM}`;
+  document.getElementById('ins-trend-sub').textContent = `${gfFrom} → ${gfTo} · השוואה לעומת ${compLabel}`;
 
-  // Branch alerts – branches accumulating the most rising tags
+  // Branch alerts
   const branchMap = {};
-  tags.filter(t=>t.mom_delta>0).forEach(t=>{
+  tags.filter(t=>t.delta>0).forEach(t=>{
     const tb = DATA.tag_branch[t.tag]||{};
     Object.entries(tb).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([branch,cnt])=>{
       if (!branchMap[branch]) branchMap[branch] = {branch, items:[], score:0};
-      branchMap[branch].items.push({tag:t.tag, delta:t.mom_delta, cnt});
-      branchMap[branch].score += t.mom_delta;
+      branchMap[branch].items.push({tag:t.tag, delta:t.delta, cnt});
+      branchMap[branch].score += t.delta;
     });
   });
   const alerts = Object.values(branchMap).sort((a,b)=>b.score-a.score).slice(0,9);
@@ -1274,7 +1284,6 @@ function renderInsights() {
         </div>`).join('')}
     </div>`).join('') || '<div style="color:var(--gray-500);font-size:13px">אין התראות סניף לתקופה זו</div>';
 }
-
 // ============================================================
 // RENDER ALL ACTIVE
 // ============================================================
