@@ -592,6 +592,12 @@ async function loadData() {
 // ============================================================
 const COLORS = ['#E31837','#006491','#f59e0b','#16a34a','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0284c7'];
 const CAT_COLORS = {'אחרי הזמנה':'#E31837','ביצוע הזמנה':'#006491','לפני הזמנה':'#f59e0b','אחר':'#adb5bd'};
+function getCategory(tag) {
+  if (tag.includes('אחרי ה')) return 'אחרי הזמנה';
+  if (tag.includes('לפני ה')||tag.includes('לפני הזמנה')) return 'לפני הזמנה';
+  if (tag.includes('ביצוע')) return 'ביצוע הזמנה';
+  return 'אחר';
+}
 const CRIT_COLORS = {'מוצר חסר':'#f59e0b','הזמנה לא סופקה':'#dc2626','פיצה לא אפויה':'#ea580c'};
 let charts = {};
 let gfFrom = '', gfTo = '';
@@ -845,7 +851,17 @@ function renderOverview() {
   );
 
   // Donut
-  const catTotals = cats.map(c=>catMonthly.reduce((s,r)=>s+(r[c]||0),0));
+  // חישוב קטגוריות לפי tag_daily לדיוק יומי
+  const catTotals = cats.map(c => {
+    let sum = 0;
+    Object.entries(DATA.tag_daily || {}).forEach(([tag, dayMap]) => {
+      if (getCategory(tag) !== c) return;
+      Object.entries(dayMap).forEach(([d, cnt]) => {
+        if (d >= gfFrom && d <= gfTo) sum += cnt;
+      });
+    });
+    return sum;
+  });
   const total2 = catTotals.reduce((a,b)=>a+b,0)||1;
   makeChart('ov-donut','doughnut',
     cats.map((c,i)=>`${c} (${Math.round(100*catTotals[i]/total2)}%)`),
@@ -1076,15 +1092,21 @@ function renderCritical() {
     { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
   );
 
-  // --- Critical by branch (tag_branch summed, no date filter needed – full 2025+ data) ---
+  // --- Critical by branch – filtered by selected date range ---
   const branchSums = {};
   activeCriticalTags.forEach(({tag}) => {
+    const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
+    const tagFiltered = Object.entries(dayMap)
+      .filter(([d]) => d >= gfFrom && d <= gfTo)
+      .reduce((s,[,v])=>s+v, 0);
+    if (!tagFiltered) return;
     const tb = DATA.tag_branch[tag]||{};
+    const branchTotal = Object.values(tb).reduce((s,v)=>s+v,0)||1;
     Object.entries(tb).forEach(([branch, cnt]) => {
-      branchSums[branch] = (branchSums[branch]||0) + cnt;
+      branchSums[branch] = (branchSums[branch]||0) + Math.round(tagFiltered * cnt / branchTotal);
     });
   });
-  const critByBranch = Object.entries(branchSums).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const critByBranch = Object.entries(branchSums).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,20);
   makeChart('cr-branches','bar',
     critByBranch.map(r=>r[0]),
     [{ data:critByBranch.map(r=>r[1]), backgroundColor:critByBranch.map((_,i)=>i<3?'#dc2626cc':i<7?'#ea580ccc':'#f59e0bcc'), borderRadius:4 }],
