@@ -280,16 +280,15 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 <div class="global-filter">
   <div class="gf-inner">
     <span class="gf-label">📅 סינון תאריכים:</span>
-    <input type="date" id="gf-from" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
+    <input type="date" id="gf-from" min="2025-01-01" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
     <span style="color:var(--gray-500);font-size:12px">עד</span>
-    <input type="date" id="gf-to" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
+    <input type="date" id="gf-to" min="2025-01-01" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
     <span style="color:var(--gray-400);font-size:11px;margin-right:6px"></span>
     <div class="gf-sep"></div>
     <button class="gf-shortcut" onclick="setRange('month')">חודש אחרון</button>
     <button class="gf-shortcut" onclick="setRange('quarter')">רבעון אחרון</button>
     <button class="gf-shortcut" onclick="setRange('2026')">2026</button>
     <button class="gf-shortcut" onclick="setRange('2025')">2025</button>
-    <button class="gf-shortcut" onclick="setRange('2024')">2024</button>
     <button class="gf-shortcut active" onclick="setRange('all')">הכל</button>
     <div class="gf-sep"></div>
     <span class="gf-active-label">מציג: <span id="gf-range-display">כל התקופה</span></span>
@@ -469,6 +468,25 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     <div class="ct">התפלגות שבועית – תיוגים קריטיים</div>
     <div class="cs">סה"כ פניות קריטיות לפי יום בשבוע</div>
     <div class="chart-wrapper" style="height:200px"><canvas id="cr-weekday"></canvas></div>
+  </div>
+
+  <!-- ✅ טופ 5 סניפים לכל קבוצה -->
+  <div class="chart-card" style="margin-top:14px">
+    <div class="ct">🏪 טופ 5 סניפים לכל קבוצה קריטית</div>
+    <div class="cs">לפי התקופה הנבחרת</div>
+    <div id="cr-top5-groups" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px"></div>
+  </div>
+
+  <!-- ✅ דרופדאון סניף -->
+  <div class="chart-card" style="margin-top:14px">
+    <div class="ct">🔍 פירוט תיוגים קריטיים לפי סניף</div>
+    <div class="cs">בחר סניף לצפייה בפירוט התיוגים הקריטיים שלו</div>
+    <div style="margin:12px 0">
+      <select id="cr-branch-select" onchange="renderCritBranchDetail()" style="font-family:'Heebo',sans-serif;font-size:13px;font-weight:600;padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:var(--radius-sm);background:var(--white);min-width:220px">
+        <option value="">— בחר סניף —</option>
+      </select>
+    </div>
+    <div id="cr-branch-detail"></div>
   </div>
 </div>
 
@@ -651,6 +669,9 @@ function setRange(mode) {
 function applyGlobalFilter() {
   gfFrom = document.getElementById('gf-from').value;
   gfTo   = document.getElementById('gf-to').value;
+  // ✅ חסום תאריכים לפני 2025
+  if (gfFrom && gfFrom < '2025-01-01') { gfFrom = '2025-01-01'; document.getElementById('gf-from').value = gfFrom; }
+  if (gfTo   && gfTo   < '2025-01-01') { gfTo   = '2025-01-01'; document.getElementById('gf-to').value   = gfTo;   }
   document.querySelectorAll('.gf-shortcut').forEach(b => b.classList.remove('active'));
   updateRangeDisplay();
   renderAll();
@@ -707,29 +728,19 @@ function filteredBranchTotals() {
 
 // For full branch list (not just top 20 in branch_daily), use top_branches ratios
 function filteredTopBranches() {
-  const fromM = gfFrom.substring(0,7);
-  const toM   = gfTo.substring(0,7);
-  // Use tag_daily if available for day-accurate branch counts
-  if (DATA.tag_daily) {
+  if (DATA.branch_daily) {
     const branchSums = {};
-    Object.entries(DATA.tag_branch || {}).forEach(([tag, branchMap]) => {
-      // Count days in range for this tag
-      const dayMap = DATA.tag_daily[tag] || {};
-      const tagTotal = Object.values(dayMap).reduce((s,v)=>s+v,0);
-      const tagFiltered = Object.entries(dayMap)
+    Object.entries(DATA.branch_daily).forEach(([branch, dayMap]) => {
+      const cnt = Object.entries(dayMap)
         .filter(([d]) => d >= gfFrom && d <= gfTo)
-        .reduce((s,[,v])=>s+v, 0);
-      const ratio = tagTotal > 0 ? tagFiltered/tagTotal : 0;
-      Object.entries(branchMap).forEach(([branch, cnt]) => {
-        branchSums[branch] = (branchSums[branch]||0) + Math.round(cnt * ratio);
-      });
+        .reduce((s,[,v]) => s+v, 0);
+      if (cnt > 0) branchSums[branch] = cnt;
     });
     return Object.entries(branchSums)
-      .filter(([,c]) => c > 0)
       .sort((a,b) => b[1]-a[1])
       .map(([branch, count]) => ({branch, count}));
   }
-  // Fallback: monthly
+  // Fallback
   const fromMf = gfFrom.substring(0,7), toMf = gfTo.substring(0,7);
   const weightedBranch = {};
   Object.entries(DATA.tag_branch || {}).forEach(([tag, branchMap]) => {
@@ -924,21 +935,31 @@ function renderBranches() {
 }
 
 function renderHeatmap() {
-  const tags = DATA.top15_tags;
+  // ✅ top 15 תיוגים לפי התקופה הנבחרת (דינמי)
+  const tags = filteredTags().slice(0, 15).map(r => r.tag);
   const branches = filteredTopBranches().slice(0, 15).map(r => r.branch);
   const hmLookup = {};
   branches.forEach(branch => {
     hmLookup[branch] = {};
     tags.forEach(tag => {
-      const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
-      const branchMap = (DATA.tag_branch && DATA.tag_branch[tag]) || {};
-      const branchTotal = Object.values(branchMap).reduce((s,v)=>s+v,0);
-      if (!branchTotal || !branchMap[branch]) { hmLookup[branch][tag] = 0; return; }
-      const branchRatio = branchMap[branch] / branchTotal;
-      const filteredTagCount = Object.entries(dayMap)
-        .filter(([d]) => d >= gfFrom && d <= gfTo)
-        .reduce((s,[,v])=>s+v, 0);
-      hmLookup[branch][tag] = Math.round(filteredTagCount * branchRatio);
+      if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag] && DATA.tag_branch_daily[tag][branch]) {
+        // ✅ מדויק לפי תאריך
+        const cnt = Object.entries(DATA.tag_branch_daily[tag][branch])
+          .filter(([d]) => d >= gfFrom && d <= gfTo)
+          .reduce((s,[,v]) => s+v, 0);
+        hmLookup[branch][tag] = cnt;
+      } else {
+        // Fallback: יחס מצטבר
+        const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
+        const branchMap = (DATA.tag_branch && DATA.tag_branch[tag]) || {};
+        const branchTotal = Object.values(branchMap).reduce((s,v)=>s+v,0);
+        if (!branchTotal || !branchMap[branch]) { hmLookup[branch][tag] = 0; return; }
+        const branchRatio = branchMap[branch] / branchTotal;
+        const filteredTagCount = Object.entries(dayMap)
+          .filter(([d]) => d >= gfFrom && d <= gfTo)
+          .reduce((s,[,v])=>s+v, 0);
+        hmLookup[branch][tag] = Math.round(filteredTagCount * branchRatio);
+      }
     });
   });
   const maxVal = Math.max(...branches.flatMap(b=>tags.map(t=>(hmLookup[b]||{})[t]||0)),1);
@@ -1087,19 +1108,28 @@ function renderCritical() {
     { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
   );
 
-  // --- Critical by branch – filtered by selected date range ---
+  // --- Critical by branch – שימוש ב-tag_branch_daily לדיוק מלא ---
   const branchSums = {};
   activeCriticalTags.forEach(({tag}) => {
-    const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
-    const tagFiltered = Object.entries(dayMap)
-      .filter(([d]) => d >= gfFrom && d <= gfTo)
-      .reduce((s,[,v])=>s+v, 0);
-    if (!tagFiltered) return;
-    const tb = DATA.tag_branch[tag]||{};
-    const branchTotal = Object.values(tb).reduce((s,v)=>s+v,0)||1;
-    Object.entries(tb).forEach(([branch, cnt]) => {
-      branchSums[branch] = (branchSums[branch]||0) + Math.round(tagFiltered * cnt / branchTotal);
-    });
+    if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag]) {
+      Object.entries(DATA.tag_branch_daily[tag]).forEach(([branch, dayMap]) => {
+        const cnt = Object.entries(dayMap)
+          .filter(([d]) => d >= gfFrom && d <= gfTo)
+          .reduce((s,[,v]) => s+v, 0);
+        if (cnt > 0) branchSums[branch] = (branchSums[branch]||0) + cnt;
+      });
+    } else {
+      const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
+      const tagFiltered = Object.entries(dayMap)
+        .filter(([d]) => d >= gfFrom && d <= gfTo)
+        .reduce((s,[,v])=>s+v, 0);
+      if (!tagFiltered) return;
+      const tb = DATA.tag_branch[tag]||{};
+      const branchTotal = Object.values(tb).reduce((s,v)=>s+v,0)||1;
+      Object.entries(tb).forEach(([branch, cnt]) => {
+        branchSums[branch] = (branchSums[branch]||0) + Math.round(tagFiltered * cnt / branchTotal);
+      });
+    }
   });
   const critByBranch = Object.entries(branchSums).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,20);
   makeChart('cr-branches','bar',
@@ -1127,6 +1157,98 @@ function renderCritical() {
       y1:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false},beginAtZero:true,position:'left'}
     }}
   });
+
+  // ✅ טופ 5 סניפים לכל קבוצה
+  renderCritTop5Groups();
+
+  // ✅ מלא דרופדאון סניפים
+  const branchSel = document.getElementById('cr-branch-select');
+  const currentVal = branchSel.value;
+  const allBranches = filteredTopBranches().map(r=>r.branch).sort((a,b)=>a.localeCompare(b,'he'));
+  branchSel.innerHTML = '<option value="">— בחר סניף —</option>' +
+    allBranches.map(b=>`<option value="${b}" ${b===currentVal?'selected':''}>${b}</option>`).join('');
+  if (currentVal) renderCritBranchDetail();
+}
+
+// ============================================================
+// CRITICAL – TOP5 PER GROUP + BRANCH DETAIL
+// ============================================================
+function renderCritTop5Groups() {
+  const groups = [...new Set(activeCriticalTags.map(x=>x.group))];
+  const container = document.getElementById('cr-top5-groups');
+  container.style.gridTemplateColumns = `repeat(${Math.min(groups.length,3)},1fr)`;
+
+  container.innerHTML = groups.map(group => {
+    const tagsInGroup = activeCriticalTags.filter(x=>x.group===group).map(x=>x.tag);
+    const branchSums = {};
+    tagsInGroup.forEach(tag => {
+      if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag]) {
+        Object.entries(DATA.tag_branch_daily[tag]).forEach(([branch, dayMap]) => {
+          const cnt = Object.entries(dayMap).filter(([d])=>d>=gfFrom&&d<=gfTo).reduce((s,[,v])=>s+v,0);
+          if (cnt>0) branchSums[branch] = (branchSums[branch]||0)+cnt;
+        });
+      } else {
+        const tb = DATA.tag_branch[tag]||{};
+        Object.entries(tb).forEach(([branch,cnt])=>{ branchSums[branch]=(branchSums[branch]||0)+cnt; });
+      }
+    });
+    const top5 = Object.entries(branchSums).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const max = top5[0]?.[1]||1;
+    const color = GROUP_COLORS[group]||'#E31837';
+    const icon = GROUP_ICONS[group]||'📌';
+    return `<div style="background:var(--white);border:1px solid var(--gray-200);border-top:3px solid ${color};border-radius:var(--radius);padding:14px">
+      <div style="font-size:12px;font-weight:800;color:${color};margin-bottom:10px">${icon} ${group}</div>
+      ${top5.length===0 ? '<div style="color:var(--gray-500);font-size:12px">אין נתונים לתקופה זו</div>' :
+        top5.map(([branch,cnt],i)=>`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+          <span style="font-size:10px;font-weight:800;color:var(--gray-500);width:14px">${i+1}</span>
+          <span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${branch}</span>
+          <span style="font-size:12px;font-weight:800;color:${color}">${fmt(cnt)}</span>
+        </div>
+        <div style="height:4px;background:var(--gray-100);border-radius:2px;margin-bottom:4px">
+          <div style="height:100%;width:${Math.round(100*cnt/max)}%;background:${color};border-radius:2px"></div>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderCritBranchDetail() {
+  const branch = document.getElementById('cr-branch-select').value;
+  const container = document.getElementById('cr-branch-detail');
+  if (!branch) { container.innerHTML = ''; return; }
+
+  const groups = [...new Set(activeCriticalTags.map(x=>x.group))];
+  const rows = [];
+  activeCriticalTags.forEach(({tag, group}) => {
+    let cnt = 0;
+    if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag] && DATA.tag_branch_daily[tag][branch]) {
+      cnt = Object.entries(DATA.tag_branch_daily[tag][branch])
+        .filter(([d])=>d>=gfFrom&&d<=gfTo).reduce((s,[,v])=>s+v,0);
+    } else if (DATA.tag_branch && DATA.tag_branch[tag] && DATA.tag_branch[tag][branch]) {
+      cnt = DATA.tag_branch[tag][branch];
+    }
+    if (cnt>0) rows.push({tag, group, cnt});
+  });
+
+  if (rows.length===0) {
+    container.innerHTML = `<div style="color:var(--gray-500);font-size:13px;padding:10px 0">אין תיוגים קריטיים לסניף זה בתקופה הנבחרת</div>`;
+    return;
+  }
+
+  rows.sort((a,b)=>b.cnt-a.cnt);
+  const total = rows.reduce((s,r)=>s+r.cnt,0);
+  container.innerHTML = `
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:10px">סה"כ ${fmt(total)} פניות קריטיות לסניף <strong>${branch}</strong></div>
+    <table class="branch-table" style="width:100%">
+      <thead><tr><th>תיוג</th><th>קבוצה</th><th>פניות</th><th>% מסה"כ קריטי</th><th>גרף</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td>${r.tag}</td>
+        <td><span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${GROUP_COLORS[r.group]||'#E31837'}18;color:${GROUP_COLORS[r.group]||'#E31837'};font-weight:700">${GROUP_ICONS[r.group]||'📌'} ${r.group}</span></td>
+        <td><strong>${fmt(r.cnt)}</strong></td>
+        <td>${(100*r.cnt/total).toFixed(1)}%</td>
+        <td><div class="bar-cell"><div class="bar-outer"><div class="bar-inner" style="width:${Math.round(100*r.cnt/rows[0].cnt)}%;background:${GROUP_COLORS[r.group]||'#E31837'}"></div></div></div></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
 }
 
 // ============================================================
@@ -1202,8 +1324,15 @@ function renderInsights() {
                     : sortBy === 'volume' ? cur
                     : Math.abs(delta);
 
-      const tb = DATA.tag_branch[tag] || {};
-      const topBranch = Object.entries(tb).sort((a,b)=>b[1]-a[1])[0] || null;
+      const tb = DATA.tag_branch_daily && DATA.tag_branch_daily[tag]
+        ? Object.entries(DATA.tag_branch_daily[tag]).map(([branch, dayMap]) => {
+            const cnt = Object.entries(dayMap)
+              .filter(([d]) => d >= gfFrom && d <= gfTo)
+              .reduce((s,[,v]) => s+v, 0);
+            return [branch, cnt];
+          }).filter(([,c]) => c > 0).sort((a,b) => b[1]-a[1])
+        : Object.entries(DATA.tag_branch[tag] || {}).sort((a,b)=>b[1]-a[1]);
+      const topBranch = tb[0] || null;
 
       return { tag, cur, prev, delta, pct, sortVal, topBranch };
     }).filter(Boolean);
