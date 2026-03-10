@@ -285,11 +285,13 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     <input type="date" id="gf-to" min="2025-01-01" onchange="applyGlobalFilter()" onblur="applyGlobalFilter()" oninput="applyGlobalFilter()" />
     <span style="color:var(--gray-400);font-size:11px;margin-right:6px"></span>
     <div class="gf-sep"></div>
+    <button class="gf-shortcut active" onclick="setRange('yesterday')">אתמול</button>
+    <button class="gf-shortcut" onclick="setRange('week')">שבוע אחרון</button>
     <button class="gf-shortcut" onclick="setRange('month')">חודש אחרון</button>
     <button class="gf-shortcut" onclick="setRange('quarter')">רבעון אחרון</button>
     <button class="gf-shortcut" onclick="setRange('2026')">2026</button>
     <button class="gf-shortcut" onclick="setRange('2025')">2025</button>
-    <button class="gf-shortcut active" onclick="setRange('all')">הכל</button>
+    <button class="gf-shortcut" onclick="setRange('all')">הכל</button>
     <div class="gf-sep"></div>
     <span class="gf-active-label">מציג: <span id="gf-range-display">כל התקופה</span></span>
   </div>
@@ -328,6 +330,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
       <div class="kpi-val" id="kpi-total">—</div>
       <div class="kpi-lbl">סה"כ פניות</div>
       <div class="kpi-sub" id="kpi-period">—</div>
+      <div class="kpi-sub" style="color:#f59e0b;font-size:10px;margin-top:3px">* פניות מתויגות בלבד</div>
     </div>
     <div class="kpi-card blue">
       <div class="kpi-icon">📅</div>
@@ -343,7 +346,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     </div>
     <div class="kpi-card green">
       <div class="kpi-icon">🏪</div>
-      <div class="kpi-val">68</div>
+      <div class="kpi-val" id="kpi-branches">64</div>
       <div class="kpi-lbl">סניפים פעילים</div>
       <div class="kpi-sub">לאחר איחוד שמות</div>
     </div>
@@ -631,8 +634,9 @@ function initDateFilter() {
   document.getElementById('gf-from').max = dmax;
   document.getElementById('gf-to').min = dmin;
   document.getElementById('gf-to').max = dmax;
-  gfFrom = dmin; gfTo = dmax;
-  document.getElementById('gf-from').value = dmin;
+  // ✅ ברירת מחדל: אתמול = dmax (היום האחרון בנתונים)
+  gfFrom = dmax; gfTo = dmax;
+  document.getElementById('gf-from').value = dmax;
   document.getElementById('gf-to').value = dmax;
 }
 
@@ -643,7 +647,12 @@ function setRange(mode) {
   let from, to = dmax;
   const now = new Date(dmax);
 
-  if (mode === 'all') {
+  if (mode === 'yesterday') {
+    from = to = dmax;
+  } else if (mode === 'week') {
+    const d = new Date(dmax); d.setDate(d.getDate()-6);
+    from = d.toISOString().split('T')[0];
+  } else if (mode === 'all') {
     from = DATA.summary.date_min;
   } else if (mode === 'month') {
     const d = new Date(now); d.setMonth(d.getMonth()-1);
@@ -839,21 +848,60 @@ function renderOverview() {
   document.getElementById('kpi-top-name').textContent = shortTag(topTag.tag);
   document.getElementById('kpi-period').textContent = gfFrom===DATA.summary.date_min && gfTo===DATA.summary.date_max ? 'כל התקופה' : `${gfFrom} → ${gfTo}`;
   document.getElementById('kpi-days').textContent = `על פני ${days} ימים`;
+  document.getElementById('kpi-branches').textContent = DATA.summary.active_branches;
   document.getElementById('hdr-total').textContent = fmt(total);
   document.getElementById('hdr-critical').textContent = fmt(daily.reduce((s,r)=>s+(r.critical||0),0));
 
+  // Trend — 30 ימים אחרונים כרקע + הבחירה הנוכחית מודגשת
+  const dmax = DATA.summary.date_max;
+  const d30 = new Date(dmax); d30.setDate(d30.getDate()-29);
+  const d30str = d30.toISOString().split('T')[0];
+  const last30days = DATA.daily
+    .filter(r => r.date >= d30str && r.date <= dmax)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const trendLabels = last30days.map(r=>r.date.substring(5)); // MM-DD
+
   const cats = ['אחרי הזמנה','ביצוע הזמנה','לפני הזמנה','אחר'];
   const showCats = cat==='all' ? cats : [cat];
-  const labels = catMonthly.map(r=>r.yearmonth);
 
-  // Trend
-  makeChart('ov-trend','line', labels,
+  // חישוב ערכים יומיים לפי קטגוריה
+  const dailyCatMap = {};
+  last30days.forEach(r => { dailyCatMap[r.date] = {'אחרי הזמנה':0,'ביצוע הזמנה':0,'לפני הזמנה':0,'אחר':0}; });
+  Object.entries(DATA.tag_daily || {}).forEach(([tag, dayMap]) => {
+    const c = getCategory(tag);
+    Object.entries(dayMap).forEach(([d, cnt]) => {
+      if (dailyCatMap[d]) dailyCatMap[d][c] = (dailyCatMap[d][c]||0) + cnt;
+    });
+  });
+
+  makeChart('ov-trend','line', trendLabels,
     showCats.map(c => ({
-      label: c, data: catMonthly.map(r=>r[c]||0),
-      borderColor: CAT_COLORS[c], backgroundColor: CAT_COLORS[c]+'22',
-      fill:true, tension:0.4, borderWidth:2, pointRadius:2, pointHoverRadius:5,
+      label: c,
+      data: last30days.map(r => dailyCatMap[r.date]?.[c] || 0),
+      borderColor: CAT_COLORS[c],
+      backgroundColor: last30days.map(r =>
+        r.date >= gfFrom && r.date <= gfTo
+          ? CAT_COLORS[c] + '55'
+          : CAT_COLORS[c] + '11'
+      ),
+      fill: true, tension: 0.3, borderWidth: 2,
+      pointRadius: last30days.map(r => r.date >= gfFrom && r.date <= gfTo ? 3 : 1),
+      pointBackgroundColor: last30days.map(r =>
+        r.date >= gfFrom && r.date <= gfTo ? CAT_COLORS[c] : CAT_COLORS[c]+'55'
+      ),
+      segment: {
+        borderColor: ctx => {
+          const d = last30days[ctx.p0DataIndex]?.date;
+          return d >= gfFrom && d <= gfTo ? CAT_COLORS[c] : CAT_COLORS[c] + '44';
+        },
+        borderWidth: ctx => {
+          const d = last30days[ctx.p0DataIndex]?.date;
+          return d >= gfFrom && d <= gfTo ? 2.5 : 1;
+        }
+      }
     })),
-    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`},
+      extra:{ scales:{x:{ticks:{maxTicksLimit:10,font:{family:'Heebo',size:10}},grid:{display:false}}}} }
   );
 
   // Donut
