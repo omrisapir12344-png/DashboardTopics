@@ -952,17 +952,31 @@ function renderBranches() {
     { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
   );
 
-  // Trend - top 5 in filtered range
+  // Trend - top 5 in filtered range - daily last 30 days
   const top5 = branchData.slice(0,5).map(r=>r.branch);
-  const bm = filteredBranchMonthly();
-  document.getElementById('br-trend-sub').textContent = `${gfFrom.substring(0,7)} → ${gfTo.substring(0,7)}`;
+
+  // בונה 30 ימים אחורה מ-gfTo
+  const trendDays = [];
+  const trendEnd = new Date(gfTo);
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(trendEnd);
+    d.setDate(d.getDate() - i);
+    trendDays.push(d.toISOString().slice(0,10));
+  }
+
+  document.getElementById('br-trend-sub').textContent = `30 יום אחרונים · תקופה נבחרת: ${gfFrom} → ${gfTo}`;
   makeChart('br-trend','line',
-    bm.map(r=>r.yearmonth),
-    top5.map((b,i) => ({
-      label:b, data:bm.map(r=>r[b]||0),
-      borderColor:COLORS[i], backgroundColor:COLORS[i]+'22',
-      tension:0.4, borderWidth:2, pointRadius:2,
-    })),
+    trendDays.map(d => d.substring(5)),
+    top5.map((b,i) => {
+      const dayMap = (DATA.branch_daily && DATA.branch_daily[b]) || {};
+      return {
+        label: b,
+        data: trendDays.map(d => dayMap[d] || 0),
+        borderColor: COLORS[i],
+        backgroundColor: COLORS[i] + '22',
+        tension: 0.4, borderWidth: 2, pointRadius: 2,
+      };
+    }),
     { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
   );
 
