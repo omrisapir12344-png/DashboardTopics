@@ -456,8 +456,8 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 
   <div class="charts-row equal">
     <div class="chart-card">
-      <div class="ct">מגמה חודשית – תיוגים קריטיים</div>
-      <div class="cs">לפי קבוצות ותקופה נבחרת</div>
+      <div class="ct">מגמה – תיוגים קריטיים (30 יום)</div>
+      <div class="cs" id="cr-trend-sub">לפי קבוצות ותקופה נבחרת</div>
       <div class="chart-wrapper" style="height:260px"><canvas id="cr-trend"></canvas></div>
     </div>
     <div class="chart-card">
@@ -1155,19 +1155,46 @@ function renderCritical() {
   });
   renderCritCards(groupCounts, totalCalls);
 
-  // --- Monthly trend (tag_monthly summed per group) ---
+  // --- Daily trend: 30 days before gfFrom → gfTo ---
   const groupNames = [...new Set(activeCriticalTags.map(x=>x.group))];
   const trendColors = ['#dc2626','#ea580c','#ca8a04','#7c3aed','#0891b2','#16a34a'];
-  makeChart('cr-trend','line', months,
+  const critTrendDays = [];
+  const critTrendStart = new Date(gfFrom);
+  critTrendStart.setDate(critTrendStart.getDate() - 30);
+  const critTrendEnd = new Date(gfTo);
+  for (let d = new Date(critTrendStart); d <= critTrendEnd; d.setDate(d.getDate()+1)) {
+    critTrendDays.push(d.toISOString().slice(0,10));
+  }
+  const critTrendStartStr = critTrendStart.toISOString().slice(0,10);
+  document.getElementById('cr-trend-sub').textContent = `30 יום קודם (${critTrendStartStr}) → ${gfTo} · תקופה נבחרת: ${gfFrom} → ${gfTo}`;
+  makeChart('cr-trend','line',
+    critTrendDays.map(d => d.substring(5)),
     groupNames.map((g,i) => ({
       label: g,
-      data: months.map(m => activeCriticalTags.filter(x=>x.group===g)
-        .reduce((s,{tag}) => s + ((DATA.tag_monthly[tag]||{})[m]||0), 0)),
+      data: critTrendDays.map(day => activeCriticalTags.filter(x=>x.group===g)
+        .reduce((s,{tag}) => s + ((DATA.tag_daily[tag]||{})[day]||0), 0)),
       borderColor: trendColors[i%trendColors.length],
       backgroundColor: trendColors[i%trendColors.length]+'33',
       fill:true, tension:0.4, borderWidth:2, pointRadius:2,
     })),
-    { ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+    {
+      ttCb:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`},
+      extra:{
+        plugins:{
+          annotation:{
+            annotations:{
+              selectedRange:{
+                type:'box',
+                xMin: gfFrom.substring(5),
+                xMax: gfTo.substring(5),
+                backgroundColor:'rgba(227,24,55,0.08)',
+                borderWidth:0,
+              }
+            }
+          }
+        }
+      }
+    }
   );
 
   // --- Critical by branch – שימוש ב-tag_branch_daily לדיוק מלא ---
