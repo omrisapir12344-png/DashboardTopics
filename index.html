@@ -392,7 +392,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
       <div class="chart-wrapper" style="height:380px"><canvas id="br-bar"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="ct">מגמה חודשית – 5 סניפים מובילים</div>
+      <div class="ct">מגמה יומית – 5 סניפים מובילים</div>
       <div class="cs" id="br-trend-sub">לפי תקופה נבחרת</div>
       <div class="chart-wrapper" style="height:380px"><canvas id="br-trend"></canvas></div>
     </div>
@@ -795,6 +795,9 @@ function makeChart(id, type, labels, datasets, opts={}) {
   destroyChart(id);
   const ctx = document.getElementById(id);
   if (!ctx) return;
+  const extraPlugins = (opts.extra && opts.extra.plugins) || {};
+  const extraOpts = opts.extra ? {...opts.extra} : {};
+  delete extraOpts.plugins;
   charts[id] = new Chart(ctx, {
     type,
     data: { labels, datasets },
@@ -802,14 +805,15 @@ function makeChart(id, type, labels, datasets, opts={}) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: opts.legend !== false, position: opts.legPos||'top', labels:{font:{family:'Heebo',size:11},boxWidth:12,padding:10} },
-        tooltip: { titleFont:{family:'Heebo',size:12}, bodyFont:{family:'Heebo',size:11}, callbacks: opts.ttCb||{} }
+        tooltip: { titleFont:{family:'Heebo',size:12}, bodyFont:{family:'Heebo',size:11}, callbacks: opts.ttCb||{} },
+        ...extraPlugins
       },
       scales: (type==='bar'||type==='line') ? {
         x: { ticks:{font:{family:'Heebo',size:10}}, grid:{display:false}, ...(opts.xOpts||{}) },
         y: { ticks:{font:{family:'Heebo',size:10},callback:v=>fmt(v)}, grid:{color:'#f1f3f5'}, beginAtZero:true, ...(opts.yOpts||{}) },
         ...(opts.extraScales||{})
       } : {},
-      ...(opts.extra||{})
+      ...extraOpts
     }
   });
 }
@@ -952,19 +956,91 @@ function renderBranches() {
     { legend:false, extra:{indexAxis:'y',scales:{x:{ticks:{font:{family:'Heebo',size:9}},grid:{color:'#f1f3f5'}},y:{ticks:{font:{family:'Heebo',size:10}},grid:{display:false}}}} }
   );
 
-  // Trend - top 5 in filtered range - daily last 30 days
-  const top5 = branchData.slice(0,5).map(r=>r.branch);
+  // Trend - חכם לפי תקופה
 
-  // בונה 30 ימים אחורה מ-gfTo
-  const trendDays = [];
-  const trendEnd = new Date(gfTo);
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(trendEnd);
-    d.setDate(d.getDate() - i);
-    trendDays.push(d.toISOString().slice(0,10));
+  // Trend - חכם לפי תקופה
+  const selDays = filteredDaily().map(r=>r.date);
+  const selLen  = selDays.length;
+
+  let trendDays = [];
+  if (selLen < 30) {
+    // פחות מ-30 יום — מציג 30 יום אחורה מ-gfTo
+    const trendEnd = new Date(gfTo);
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(trendEnd);
+      d.setDate(d.getDate() - i);
+      trendDays.push(d.toISOString().slice(0,10));
+    }
+  } else {
+    // 30 יום ומעלה — מציג את התקופה הנבחרת בדיוק
+    trendDays = selDays;
   }
 
-  document.getElementById('br-trend-sub').textContent = `30 יום אחרונים · תקופה נבחרת: ${gfFrom} → ${gfTo}`;
+  const trendFrom = trendDays[0];
+  const trendTo   = trendDays[trendDays.length-1];
+
+  // top5 לפי התקופה הנבחרת בלבד
+  const branchTotals = {};
+  Object.entries(DATA.branch_daily || {}).forEach(([branch, dayMap]) => {
+    const cnt = Object.entries(dayMap).filter(([d])=>d>=gfFrom&&d<=gfTo).reduce((s,[,v])=>s+v,0);
+    if (cnt > 0) branchTotals[branch] = cnt;
+  });
+  const top5 = Object.entries(branchTotals).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([b])=>b);
+
+  // הדגשה על התקופה הנבחרת
+  const hlFrom = trendDays.indexOf(gfFrom);
+  const hlTo   = trendDays.indexOf(gfTo);
+
+  document.getElementById('br-trend-sub').textContent = selLen < 30
+    ? `30 יום (${trendFrom} → ${trendTo}) · תקופה נבחרת: ${gfFrom} → ${gfTo}`
+    : `תקופה נבחרת: ${gfFrom} → ${gfTo}`;
+
+  destroyChart('br-trend');
+  const brCanvas = document.getElementById('br-trend');
+  const brChart = new Chart(brCanvas, {
+    type: 'line',
+    data: {
+      labels: trendDays.map(d => d.substring(5)),
+      datasets: top5.map((b,i) => {
+        const dayMap = (DATA.branch_daily && DATA.branch_daily[b]) || {};
+        return {
+          label: b,
+          data: trendDays.map(d => dayMap[d] || 0),
+          borderColor: COLORS[i],
+          backgroundColor: COLORS[i] + '22',
+          tension: 0.4, borderWidth: 2, pointRadius: 2,
+        };
+      })
+    },
+    plugins: [{
+      id: 'branchHL',
+      beforeDatasetsDraw(chart) {
+        if (hlFrom < 0 || hlTo < 0) return;
+        const {ctx, chartArea, scales:{x}} = chart;
+        if (!chartArea) return;
+        const x1 = x.getPixelForValue(hlFrom);
+        const x2 = x.getPixelForValue(hlTo);
+        ctx.save();
+        ctx.fillStyle = 'rgba(227,24,55,0.12)';
+        ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.height);
+        ctx.restore();
+      }
+    }],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'top', labels:{font:{family:'Heebo',size:11},boxWidth:12,padding:10} },
+        tooltip: { titleFont:{family:'Heebo',size:12}, bodyFont:{family:'Heebo',size:11}, callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`} }
+      },
+      scales: {
+        x: { ticks:{font:{family:'Heebo',size:10}}, grid:{display:false} },
+        y: { ticks:{font:{family:'Heebo',size:10},callback:v=>fmt(v)}, grid:{color:'#f1f3f5'}, beginAtZero:true }
+      }
+    }
+  });
+  charts['br-trend'] = brChart;
+
+  document.getElementById('br-trend-sub').textContent = `30 יום אחרונים (${trendFrom} → ${gfTo}) · תקופה נבחרת: ${gfFrom} → ${gfTo}`;
   makeChart('br-trend','line',
     trendDays.map(d => d.substring(5)),
     top5.map((b,i) => {
