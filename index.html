@@ -269,7 +269,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     </div>
     <div class="header-stats">
       <div class="hstat"><div class="n" id="hdr-total">—</div><div class="l">סה"כ פניות</div></div>
-      <div class="hstat"><div class="n">68</div><div class="l">סניפים פעילים</div></div>
+      <div class="hstat"><div class="n" id="hdr-branches">—</div><div class="l">סניפים פעילים</div></div>
       <div class="hstat"><div class="n" id="hdr-critical">—</div><div class="l">תיוגים קריטיים</div></div>
       <div class="hstat" id="hdr-updated" style="display:none"><div class="n" style="font-size:11px;color:var(--gray-500)" id="hdr-updated-time">—</div><div class="l">עדכון אחרון</div></div>
     </div>
@@ -379,7 +379,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     <select id="br-count" onchange="renderBranches()">
       <option value="15">15 מובילים</option>
       <option value="25">25 מובילים</option>
-      <option value="68">כל הסניפים</option>
+      <option id="opt-all-branches" value="999">כל הסניפים</option>
     </select>
     <div class="fsep"></div>
     <button class="btn-rst" onclick="document.getElementById('br-count').value='15';renderBranches()">↺ איפוס</button>
@@ -853,6 +853,9 @@ function renderOverview() {
   document.getElementById('kpi-period').textContent = gfFrom===DATA.summary.date_min && gfTo===DATA.summary.date_max ? 'כל התקופה' : `${gfFrom} → ${gfTo}`;
   document.getElementById('kpi-days').textContent = `על פני ${days} ימים`;
   document.getElementById('kpi-branches').textContent = DATA.summary.active_branches;
+  document.getElementById('hdr-branches').textContent = DATA.summary.active_branches;
+  const optAll = document.getElementById('opt-all-branches');
+  if (optAll) optAll.value = DATA.summary.active_branches;
   document.getElementById('hdr-total').textContent = fmt(total);
   document.getElementById('hdr-critical').textContent = fmt(daily.reduce((s,r)=>s+(r.critical||0),0));
 
