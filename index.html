@@ -60,6 +60,9 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 }
 .gf-inner input[type="date"]:focus { outline: none; background: rgba(255,255,255,0.25); }
 .gf-inner input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.7; cursor: pointer; }
+/* מניעת overflow אופקי במובייל */
+body { overflow-x: hidden; }
+canvas { max-width: 100%; }
 .gf-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.2); }
 .gf-shortcut {
   font-family: 'Heebo', sans-serif; font-size: 12px; font-weight: 600;
@@ -239,8 +242,72 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 ::-webkit-scrollbar-track { background: var(--gray-100); }
 ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius:3px; }
 
-@media (max-width:1100px) { .kpi-grid{grid-template-columns:repeat(2,1fr)} .charts-row.two-col{grid-template-columns:1fr} .critical-grid{grid-template-columns:1fr 1fr} .insights-grid{grid-template-columns:repeat(2,1fr)} }
-@media (max-width:700px) { .main{padding:12px} .header{padding:0 12px} .kpi-grid{grid-template-columns:1fr 1fr} .critical-grid{grid-template-columns:1fr} .header-stats{display:none} .charts-row.equal{grid-template-columns:1fr} .insights-grid{grid-template-columns:1fr} }
+/* ===== TABLET ===== */
+@media (max-width:1100px) {
+  .kpi-grid { grid-template-columns: repeat(2,1fr); }
+  .charts-row.two-col { grid-template-columns: 1fr; }
+  .critical-grid { grid-template-columns: 1fr 1fr; }
+  .insights-grid { grid-template-columns: repeat(2,1fr); }
+}
+
+/* ===== MOBILE ===== */
+@media (max-width:700px) {
+  /* כללי */
+  .main { padding: 10px; }
+  .header { padding: 0 10px; height: auto; min-height: 52px; }
+  .header-inner { flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+  .header-title h1 { font-size: 15px; }
+  .header-title .emoji { font-size: 20px; }
+  .header-stats { display: none; }
+
+  /* שורת סינון תאריכים */
+  .global-filter { padding: 0 10px; position: sticky; top: 0; }
+  .gf-inner {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0;
+  }
+  .gf-shortcut { font-size: 11px; padding: 3px 8px; }
+  .gf-sep { display: none; }
+  .gf-active-label { width: 100%; order: 99; }
+  .gf-label { font-size: 11px; }
+  .gf-inner input[type="date"] { width: 120px; font-size: 12px; }
+  #gf-owner, #gf-cluster { font-size: 11px; padding: 3px 6px; }
+
+  /* טאבים */
+  .tabs-bar { padding: 0 6px; top: 0; overflow-x: auto; }
+  .tabs-inner { gap: 0; }
+  .tab-btn { font-size: 11px; padding: 10px 8px; white-space: nowrap; }
+
+  /* KPI */
+  .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi-card { padding: 12px; }
+  .kpi-val { font-size: 22px; }
+  .kpi-icon { font-size: 18px; margin-bottom: 4px; }
+  .kpi-lbl { font-size: 10px; }
+
+  /* גרפים */
+  .charts-row { grid-template-columns: 1fr !important; gap: 10px; }
+  .card { padding: 14px; }
+  .ct { font-size: 12px; }
+  .cs { font-size: 10px; }
+
+  /* סניפים */
+  .critical-grid { grid-template-columns: 1fr; }
+  .insights-grid { grid-template-columns: 1fr; }
+
+  /* filter-row */
+  .filter-row { flex-wrap: wrap; gap: 6px; padding: 8px 0; }
+  .filter-row select { font-size: 11px; padding: 5px 8px; }
+  .btn-rst { font-size: 11px; padding: 5px 10px; }
+  .fsep { display: none; }
+  .flabel { font-size: 11px; }
+
+  /* טאב לירון */
+  #liron-table-wrap table { font-size: 11px; }
+  #liron-table-wrap th, #liron-table-wrap td { padding: 6px 8px; }
+}
 </style>
 </head>
 <body>
