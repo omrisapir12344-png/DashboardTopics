@@ -438,10 +438,6 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 <!-- ====== TAB 3: CRITICAL ====== -->
 <div class="tab-content" id="tab-critical">
 
-  <div class="filter-row">
-    <button class="btn-rst" onclick="exportCritical()" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">📥 יצוא לאקסל</button>
-  </div>
-
   <!-- TAG MANAGER -->
   <div class="tag-manager">
     <div class="tm-header">
@@ -665,26 +661,81 @@ let charts = {};
 
 // ===== נתוני שיוך סניפים =====
 const FRANCHISE_BRANCHES = new Set([
-  'אילת','אשקלון','אשקלון כשר למהדרין','באר שבע באר אברהם','באר שבע רמות',
-  'בורוכוב גבעתיים רמת גן כשר למהדרין','הוד השרון','קדימה','נתניה עצמאות',
-  'נתניה פולג','פתח תקווה אם המושבות כשר למהדרין','קריות כשר למהדרין',
-  'קריות קריון','קריות מרכז','קריית אונו - גני תקוה','ראש העין',
-  'ראשון לציון מזרח','ראשון לציון מערב','ראשון לציון מרכז','רהט',
-  'רחובות דרום','רחובות פארק המדע','רמלה','רמת ישי','עפולה כשר למהדרין',
-  'כרמיאל','יקנעם','נצרת'
+  'אילת',
+  'אשקלון',
+  'אשקלון כשר למהדרין',
+  'באר שבע באר אברהם',
+  'באר שבע רמות',
+  'בורוכוב גבעתיים רמת גן כשר למהדרין',
+  'הוד השרון',
+  'קדימה',
+  'נתניה עצמאות',
+  'נתניה פולג',
+  'פתח תקווה אם המושבות כשר למהדרין',
+  'כפר גנים כשר למהדרין',
+  'שטמפפר כשר למהדרין',
+  'קריות מרכז',
+  'קריות קריון',
+  'קריות כשר למהדרין',
+  'נהריה',
+  'רהט',
+  'רחובות דרום',
+  'רחובות פארק המדע',
+  'נס ציונה',
+  'רמלה',
+  'רמת ישי',
+  'עפולה כשר למהדרין',
+  'כרמיאל',
+  'יקנעם'
 ]);
 
 const ALGAD_CLUSTERS = {
-  'אריה': ['חיפה מוריה','נווה שאנן','מרכז הכרמל','איינשטיין חיפה'],
-  'פרחאת': ['רמת אביב','מודיעין מער','מודיעין קייזר','ראשון לציון מערב',
-             'ראשון לציון מרכז','ראשון לציון מזרח','כפר סבא ויצמן',
-             'כפר סבא ירוקה','הרצליה מרכז','הרצליה פיתוח','חולון סטרומה',
-             'בת ים','חולון פארק פרס כשר למהדרין','יבנה'],
-  'יניב קרבציק': ['תלפיות','גבעה צרפתית','הרמת החייל'],
-  'שחזוד': ['קרליבך','ירקון כשר למהדרין','פלורנטין','נצרת עילית',
-             'אשדוד סיטי','זכרון יעקב','אשדוד כשר למהדרין','פרדס חנה',
-             'אבן גבירול','גבעתיים אלוף שדה','יהוד',
-             'גני תקווה / קריית אונו','כפר סבא ירוקה','רעננה','חדרה','כפר סבא ירוקה']
+  'אריה': [
+    'חיפה מוריה',
+    'נווה שאנן',
+    'מרכז הכרמל',
+    'איינשטיין חיפה'
+  ],
+  'פרחאת': [
+    'רמת אביב',
+    'מודיעין מער',
+    'מודיעין קייזר',
+    'ראשון לציון מערב',
+    'ראשון לציון מרכז',
+    'ראשון לציון מזרח',
+    'כפר סבא ויצמן',
+    'יגאל אלון',
+    'ראש העין',
+    'רמת השרון',
+    'הרצליה מרכז',
+    'הרצליה פיתוח',
+    'חולון סטרומה',
+    'בת ים',
+    'חולון פארק פרס כשר למהדרין',
+    'יבנה'
+  ],
+  'יניב קרבציק': [
+    'תלפיות',
+    'גבעה צרפתית',
+    'רמת החייל'
+  ],
+  'שחזוד': [
+    'קרליבך',
+    'הירקון כשר למהדרין',
+    'פלורנטין',
+    'נצרת',
+    'אשדוד סיטי',
+    'זכרון יעקב',
+    'אשדוד כשר למהדרין',
+    'פרדס חנה',
+    'אבן גבירול',
+    'גבעתיים',
+    'יהוד',
+    'קריית אונו - גני תקוה',
+    'כפר סבא ירוקה',
+    'רעננה',
+    'חדרה'
+  ]
 };
 
 const ALGAD_BRANCHES = new Set(Object.values(ALGAD_CLUSTERS).flat());
@@ -704,11 +755,7 @@ function getActiveBranchSet() {
 function branchPassesFilter(branch) {
   const s = getActiveBranchSet();
   if (!s) return true;
-  // fuzzy — בודק אם שם הסניף מכיל או נכלל
-  for (const b of s) {
-    if (branch.includes(b) || b.includes(branch)) return true;
-  }
-  return false;
+  return s.has(branch);
 }
 
 let gfFrom = '', gfTo = '';
@@ -1873,46 +1920,6 @@ function dlCSV(rows, filename) {
 function exportMeta() {
   const ownerLabel = gfOwner === 'franchise' ? 'זכיינים' : gfOwner === 'algad' ? ('אלגד' + (gfCluster !== 'all' ? ' - ' + gfCluster : '')) : 'הכל';
   return [`"תקופה: ${gfFrom} → ${gfTo}"`, `"שיוך: ${ownerLabel}"`, ''];
-}
-
-
-// תיוגים קריטיים
-function exportCritical() {
-  const lines = [...exportMeta(), ''];
-
-  // תיוגים קריטיים פעילים + סכומים
-  const activeTags = (typeof activeCriticalTags !== 'undefined') ? activeCriticalTags : [];
-  if (activeTags.length) {
-    lines.push('"תיוגים קריטיים"');
-    lines.push(['תיוג', 'קבוצה', 'כמות'].join(','));
-    activeTags.forEach(({tag, group}) => {
-      const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
-      const cnt = Object.entries(dayMap).filter(([d]) => d >= gfFrom && d <= gfTo).reduce((s,[,v])=>s+v,0);
-      lines.push([`"${tag}"`, `"${group}"`, cnt].join(','));
-    });
-    lines.push('');
-  }
-
-  // סניפים קריטיים
-  const branchSums = {};
-  (activeTags.length ? activeTags : []).forEach(({tag}) => {
-    if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag]) {
-      Object.entries(DATA.tag_branch_daily[tag]).forEach(([branch, dayMap]) => {
-        if (!branchPassesFilter(branch)) return;
-        const cnt = Object.entries(dayMap).filter(([d]) => d >= gfFrom && d <= gfTo).reduce((s,[,v])=>s+v,0);
-        if (cnt > 0) branchSums[branch] = (branchSums[branch]||0) + cnt;
-      });
-    }
-  });
-
-  const branchRows = Object.entries(branchSums).sort((a,b)=>b[1]-a[1]);
-  if (branchRows.length) {
-    lines.push('"סניפים עם תיוגים קריטיים"');
-    lines.push(['#', 'סניף', 'כמות'].join(','));
-    branchRows.forEach(([branch, cnt], i) => lines.push([i+1, `"${branch}"`, cnt].join(',')));
-  }
-
-  dlCSV(lines, `תיוגים_קריטיים_${gfFrom}_${gfTo}.csv`);
 }
 
 // סקירה כללית — תיוגים
