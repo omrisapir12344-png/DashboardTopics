@@ -294,6 +294,20 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     <button class="gf-shortcut" onclick="setRange('all')">הכל</button>
     <div class="gf-sep"></div>
     <span class="gf-active-label">מציג: <span id="gf-range-display">כל התקופה</span></span>
+    <div class="gf-sep"></div>
+    <span class="gf-label" style="white-space:nowrap">🏪 שיוך:</span>
+    <select id="gf-owner" onchange="applyOwnerFilter()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:4px 10px;border-radius:6px;font-family:inherit;font-size:12px;cursor:pointer;outline:none">
+      <option value="all">הכל</option>
+      <option value="franchise">זכיינים</option>
+      <option value="algad">אלגד</option>
+    </select>
+    <select id="gf-cluster" onchange="applyOwnerFilter()" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:4px 10px;border-radius:6px;font-family:inherit;font-size:12px;cursor:pointer;outline:none">
+      <option value="all">כל אלגד</option>
+      <option value="אריה">אריה</option>
+      <option value="פרחאת">פרחאת</option>
+      <option value="יניב קרבציק">יניב קרבציק</option>
+      <option value="שחזוד">שחזוד</option>
+    </select>
   </div>
 </div>
 
@@ -304,6 +318,7 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     <button class="tab-btn" onclick="switchTab('branches',this)">🏪 השוואת סניפים</button>
     <button class="tab-btn" onclick="switchTab('critical',this)">🚨 תיוגים קריטיים</button>
     <button class="tab-btn" onclick="switchTab('insights',this)">💡 תובנות</button>
+    <button class="tab-btn" onclick="switchTab('liron',this)">📋 טאב לירון</button>
   </div>
 </div>
 
@@ -322,6 +337,8 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     </select>
     <div class="fsep"></div>
     <button class="btn-rst" onclick="document.getElementById('ov-cat').value='all';renderOverview()">↺ איפוס</button>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="exportOverview()" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">📥 יצוא לאקסל</button>
   </div>
 
   <div class="kpi-grid">
@@ -383,6 +400,8 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     </select>
     <div class="fsep"></div>
     <button class="btn-rst" onclick="document.getElementById('br-count').value='15';renderBranches()">↺ איפוס</button>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="exportBranches()" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">📥 יצוא לאקסל</button>
   </div>
 
   <div class="charts-row equal">
@@ -418,6 +437,10 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 
 <!-- ====== TAB 3: CRITICAL ====== -->
 <div class="tab-content" id="tab-critical">
+
+  <div class="filter-row">
+    <button class="btn-rst" onclick="exportCritical()" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">📥 יצוא לאקסל</button>
+  </div>
 
   <!-- TAG MANAGER -->
   <div class="tag-manager">
@@ -512,6 +535,8 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
     </select>
     <div class="fsep"></div>
     <button class="btn-rst" onclick="document.getElementById('ins-sort').value='abs';document.getElementById('ins-dir').value='all';renderInsights()">↺ איפוס</button>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="exportInsights()" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">📥 יצוא לאקסל</button>
   </div>
 
   <!-- Period info banner -->
@@ -569,6 +594,27 @@ body { font-family: 'Heebo', sans-serif; background: var(--gray-50); color: var(
 
 </div>
 
+<div class="tab-content" id="tab-liron">
+  <div class="filter-row">
+    <span class="flabel">מיון:</span>
+    <select id="liron-sort" onchange="renderLiron()">
+      <option value="total">סה"כ פניות (גדול → קטן)</option>
+      <option value="name">שם סניף (א-ב)</option>
+      <option value="avg">ממוצע יומי</option>
+    </select>
+    <div class="fsep"></div>
+    <span class="flabel">חיפוש סניף:</span>
+    <input type="text" id="liron-search" oninput="renderLiron()" placeholder="חפש שם סניף..." style="background:var(--gray-50);border:1px solid var(--gray-200);color:var(--gray-900);padding:6px 10px;border-radius:6px;font-family:inherit;font-size:12px;outline:none;width:160px">
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="document.getElementById('liron-sort').value='total';document.getElementById('liron-search').value='';renderLiron()">↺ איפוס</button>
+    <div class="fsep"></div>
+    <button class="btn-rst" onclick="exportLironToExcel()" style="background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700">📥 יצוא לאקסל</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:8px" id="liron-cards"></div>
+  <div style="margin-top:16px" id="liron-table-wrap"></div>
+</div>
+
 </div><!-- /main -->
 
 <script>
@@ -616,6 +662,55 @@ function getCategory(tag) {
 }
 const CRIT_COLORS = {'מוצר חסר':'#f59e0b','הזמנה לא סופקה':'#dc2626','פיצה לא אפויה':'#ea580c'};
 let charts = {};
+
+// ===== נתוני שיוך סניפים =====
+const FRANCHISE_BRANCHES = new Set([
+  'אילת','אשקלון','אשקלון כשר למהדרין','באר שבע באר אברהם','באר שבע רמות',
+  'בורוכוב גבעתיים רמת גן כשר למהדרין','הוד השרון','קדימה','נתניה עצמאות',
+  'נתניה פולג','פתח תקווה אם המושבות כשר למהדרין','קריות כשר למהדרין',
+  'קריות קריון','קריות מרכז','קריית אונו - גני תקוה','ראש העין',
+  'ראשון לציון מזרח','ראשון לציון מערב','ראשון לציון מרכז','רהט',
+  'רחובות דרום','רחובות פארק המדע','רמלה','רמת ישי','עפולה כשר למהדרין',
+  'כרמיאל','יקנעם','נצרת'
+]);
+
+const ALGAD_CLUSTERS = {
+  'אריה': ['חיפה מוריה','נווה שאנן','מרכז הכרמל','איינשטיין חיפה'],
+  'פרחאת': ['רמת אביב','מודיעין מער','מודיעין קייזר','ראשון לציון מערב',
+             'ראשון לציון מרכז','ראשון לציון מזרח','כפר סבא ויצמן',
+             'כפר סבא ירוקה','הרצליה מרכז','הרצליה פיתוח','חולון סטרומה',
+             'בת ים','חולון פארק פרס כשר למהדרין','יבנה'],
+  'יניב קרבציק': ['תלפיות','גבעה צרפתית','הרמת החייל'],
+  'שחזוד': ['קרליבך','ירקון כשר למהדרין','פלורנטין','נצרת עילית',
+             'אשדוד סיטי','זכרון יעקב','אשדוד כשר למהדרין','פרדס חנה',
+             'אבן גבירול','גבעתיים אלוף שדה','יהוד',
+             'גני תקווה / קריית אונו','כפר סבא ירוקה','רעננה','חדרה','כפר סבא ירוקה']
+};
+
+const ALGAD_BRANCHES = new Set(Object.values(ALGAD_CLUSTERS).flat());
+
+let gfOwner = 'all'; // 'all' | 'franchise' | 'algad'
+let gfCluster = 'all'; // 'all' | 'אריה' | 'פרחאת' | 'יניב קרבציק' | 'שחזוד'
+
+function getActiveBranchSet() {
+  if (gfOwner === 'franchise') return FRANCHISE_BRANCHES;
+  if (gfOwner === 'algad') {
+    if (gfCluster === 'all') return ALGAD_BRANCHES;
+    return new Set(ALGAD_CLUSTERS[gfCluster] || []);
+  }
+  return null; // null = הכל
+}
+
+function branchPassesFilter(branch) {
+  const s = getActiveBranchSet();
+  if (!s) return true;
+  // fuzzy — בודק אם שם הסניף מכיל או נכלל
+  for (const b of s) {
+    if (branch.includes(b) || b.includes(branch)) return true;
+  }
+  return false;
+}
+
 let gfFrom = '', gfTo = '';
 
 function fmt(n) { return Number(n).toLocaleString('he-IL'); }
@@ -672,6 +767,15 @@ function setRange(mode) {
   document.getElementById('gf-from').value = from;
   document.getElementById('gf-to').value = to;
   updateRangeDisplay();
+  renderAll();
+}
+
+function applyOwnerFilter() {
+  gfOwner = document.getElementById('gf-owner').value;
+  gfCluster = document.getElementById('gf-cluster').value;
+  const clusterEl = document.getElementById('gf-cluster');
+  clusterEl.style.display = gfOwner === 'algad' ? '' : 'none';
+  if (gfOwner !== 'algad') gfCluster = 'all';
   renderAll();
 }
 
@@ -740,6 +844,7 @@ function filteredTopBranches() {
   if (DATA.branch_daily) {
     const branchSums = {};
     Object.entries(DATA.branch_daily).forEach(([branch, dayMap]) => {
+      if (!branchPassesFilter(branch)) return;
       const cnt = Object.entries(dayMap)
         .filter(([d]) => d >= gfFrom && d <= gfTo)
         .reduce((s,[,v]) => s+v, 0);
@@ -758,6 +863,7 @@ function filteredTopBranches() {
     const fil = Object.entries(mMap).filter(([m])=>m>=fromMf&&m<=toMf).reduce((s,[,v])=>s+v,0);
     const ratio = tot>0 ? fil/tot : 0;
     Object.entries(branchMap).forEach(([branch,cnt]) => {
+      if (!branchPassesFilter(branch)) return;
       weightedBranch[branch] = (weightedBranch[branch]||0) + Math.round(cnt*ratio);
     });
   });
@@ -766,8 +872,21 @@ function filteredTopBranches() {
 
 // Filtered tag counts – day-accurate using tag_daily
 function filteredTags() {
+  const result = {};
+  // כשיש סינון שיוך — חשב תיוגים לפי tag_branch_daily
+  if (gfOwner !== 'all' && DATA.tag_branch_daily) {
+    Object.entries(DATA.tag_branch_daily).forEach(([tag, branchMap]) => {
+      Object.entries(branchMap).forEach(([branch, dayMap]) => {
+        if (!branchPassesFilter(branch)) return;
+        const cnt = Object.entries(dayMap)
+          .filter(([d]) => d >= gfFrom && d <= gfTo)
+          .reduce((s,[,v]) => s+v, 0);
+        if (cnt > 0) result[tag] = (result[tag]||0) + cnt;
+      });
+    });
+    return Object.entries(result).sort((a,b)=>b[1]-a[1]).map(([tag,count])=>({tag,count}));
+  }
   if (DATA.tag_daily) {
-    const result = {};
     Object.entries(DATA.tag_daily).forEach(([tag, dayMap]) => {
       const cnt = Object.entries(dayMap)
         .filter(([d]) => d >= gfFrom && d <= gfTo)
@@ -778,7 +897,6 @@ function filteredTags() {
   }
   // Fallback: monthly
   const fromM = gfFrom.substring(0,7), toM = gfTo.substring(0,7);
-  const result = {};
   Object.entries(DATA.tag_monthly||{}).forEach(([tag,monthMap]) => {
     const cnt = Object.entries(monthMap).filter(([m])=>m>=fromM&&m<=toM).reduce((s,[,v])=>s+v,0);
     if (cnt>0) result[tag]=cnt;
@@ -830,6 +948,7 @@ function switchTab(tab, btn) {
   if (tab==='critical') renderCritical();
   if (tab==='overview') renderOverview();
   if (tab==='insights') renderInsights();
+  if (tab==='liron') renderLiron();
 }
 
 // ============================================================
@@ -841,9 +960,30 @@ function renderOverview() {
   const catMonthly = filteredMonthlyCat();
   const tags = filteredTags();
 
-  const total = daily.reduce((s,r)=>s+r.total,0);
-  const days = daily.length;
-  const avg = days>0 ? Math.round(total/days) : 0;
+  // כשיש סינון שיוך — חשב total מ-branch_daily לפי סניפים מסוננים
+  let total, days, avg;
+  if (gfOwner !== 'all' && DATA.branch_daily) {
+    const daySums = {};
+    Object.entries(DATA.branch_daily).forEach(([branch, dayMap]) => {
+      if (!branchPassesFilter(branch)) return;
+      Object.entries(dayMap).forEach(([d, v]) => {
+        if (d >= gfFrom && d <= gfTo) daySums[d] = (daySums[d]||0) + v;
+      });
+    });
+    total = Object.values(daySums).reduce((s,v)=>s+v, 0);
+    days = Object.keys(daySums).length || daily.length;
+    avg = days > 0 ? Math.round(total/days) : 0;
+  } else {
+    total = daily.reduce((s,r)=>s+r.total,0);
+    days = daily.length;
+    avg = days>0 ? Math.round(total/days) : 0;
+  }
+
+  // מספר סניפים פעילים בסינון
+  const activeBranchCount = gfOwner !== 'all'
+    ? filteredTopBranches().length
+    : DATA.summary.active_branches;
+
   const topTag = tags[0] || {tag:'—',count:0};
 
   document.getElementById('kpi-total').textContent = fmt(total);
@@ -852,10 +992,10 @@ function renderOverview() {
   document.getElementById('kpi-top-name').textContent = shortTag(topTag.tag);
   document.getElementById('kpi-period').textContent = gfFrom===DATA.summary.date_min && gfTo===DATA.summary.date_max ? 'כל התקופה' : `${gfFrom} → ${gfTo}`;
   document.getElementById('kpi-days').textContent = `על פני ${days} ימים`;
-  document.getElementById('kpi-branches').textContent = DATA.summary.active_branches;
-  document.getElementById('hdr-branches').textContent = DATA.summary.active_branches;
+  document.getElementById('kpi-branches').textContent = activeBranchCount;
+  document.getElementById('hdr-branches').textContent = activeBranchCount;
   const optAll = document.getElementById('opt-all-branches');
-  if (optAll) optAll.value = DATA.summary.active_branches;
+  if (optAll) optAll.value = activeBranchCount;
   document.getElementById('hdr-total').textContent = fmt(total);
   document.getElementById('hdr-critical').textContent = fmt(daily.reduce((s,r)=>s+(r.critical||0),0));
 
@@ -1281,6 +1421,7 @@ function renderCritical() {
   activeCriticalTags.forEach(({tag}) => {
     if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag]) {
       Object.entries(DATA.tag_branch_daily[tag]).forEach(([branch, dayMap]) => {
+        if (!branchPassesFilter(branch)) return;
         const cnt = Object.entries(dayMap)
           .filter(([d]) => d >= gfFrom && d <= gfTo)
           .reduce((s,[,v]) => s+v, 0);
@@ -1295,6 +1436,7 @@ function renderCritical() {
       const tb = DATA.tag_branch[tag]||{};
       const branchTotal = Object.values(tb).reduce((s,v)=>s+v,0)||1;
       Object.entries(tb).forEach(([branch, cnt]) => {
+        if (!branchPassesFilter(branch)) return;
         branchSums[branch] = (branchSums[branch]||0) + Math.round(tagFiltered * cnt / branchTotal);
       });
     }
@@ -1493,7 +1635,7 @@ function renderInsights() {
                     : Math.abs(delta);
 
       const tb = DATA.tag_branch_daily && DATA.tag_branch_daily[tag]
-        ? Object.entries(DATA.tag_branch_daily[tag]).map(([branch, dayMap]) => {
+        ? Object.entries(DATA.tag_branch_daily[tag]).filter(([branch]) => branchPassesFilter(branch)).map(([branch, dayMap]) => {
             const cnt = Object.entries(dayMap)
               .filter(([d]) => d >= gfFrom && d <= gfTo)
               .reduce((s,[,v]) => s+v, 0);
@@ -1584,6 +1726,248 @@ function renderInsights() {
 // ============================================================
 // RENDER ALL ACTIVE
 // ============================================================
+// ============================================================
+// TAB: לירון — פניות לפי סניפים
+// ============================================================
+function exportLironToExcel() {
+  const sortBy = document.getElementById('liron-sort').value;
+  const search = (document.getElementById('liron-search').value || '').trim().toLowerCase();
+
+  const branchMap = {};
+  Object.entries(DATA.branch_daily || {}).forEach(([branch, dayMap]) => {
+    if (!branchPassesFilter(branch)) return;
+    if (search && !branch.toLowerCase().includes(search)) return;
+    const days = Object.entries(dayMap).filter(([d]) => d >= gfFrom && d <= gfTo);
+    const total = days.reduce((s,[,v]) => s+v, 0);
+    if (total === 0) return;
+    const activeDays = days.filter(([,v]) => v>0).length || 1;
+    branchMap[branch] = { total, activeDays, avg: Math.round(total/activeDays) };
+  });
+
+  let rows = Object.entries(branchMap).map(([branch, d]) => ({ branch, ...d }));
+  if (sortBy === 'total') rows.sort((a,b) => b.total - a.total);
+  else if (sortBy === 'name') rows.sort((a,b) => a.branch.localeCompare(b.branch, 'he'));
+  else if (sortBy === 'avg')  rows.sort((a,b) => b.avg - a.avg);
+
+  const grandTotal = rows.reduce((s,r) => s+r.total, 0);
+  const dailyTotal = filteredDaily().reduce((s,r) => s+r.total, 0);
+  const unknownTotal = Math.max(0, dailyTotal - grandTotal);
+  if (unknownTotal > 0 && !search) {
+    const activeDays = filteredDaily().filter(r=>r.total>0).length || 1;
+    rows.push({ branch: 'לא מזוהה', total: unknownTotal, avg: Math.round(unknownTotal/activeDays) });
+  }
+
+  const BOM = '\uFEFF';
+  const ownerLabel = gfOwner === 'franchise' ? 'זכיינים' : gfOwner === 'algad' ? ('אלגד' + (gfCluster !== 'all' ? ' - ' + gfCluster : '')) : 'הכל';
+  const lines = [
+    `"תקופה: ${gfFrom} → ${gfTo}"`,
+    `"שיוך: ${ownerLabel}"`,
+    '',
+    ['#', 'סניף', 'סה"כ פניות', 'ממוצע יומי', '% מסה"כ'].join(','),
+    ...rows.map((r,i) => [i+1, `"${r.branch}"`, r.total, r.avg, ((r.total/(grandTotal+unknownTotal||1))*100).toFixed(1)+'%'].join(',')),
+    `"סה"כ (${rows.filter(r=>r.branch!=='לא מזוהה').length} סניפים)",,${grandTotal+unknownTotal},,100%`
+  ];
+
+  const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `פניות_לפי_סניף_${gfFrom}_${gfTo}.csv`;
+  a.click();
+}
+
+
+function renderLiron() {
+  const sortBy  = document.getElementById('liron-sort').value;
+  const search  = (document.getElementById('liron-search').value || '').trim().toLowerCase();
+
+  // בנה רשימת סניפים עם סכום פניות בתקופה
+  const branchMap = {};
+  Object.entries(DATA.branch_daily || {}).forEach(([branch, dayMap]) => {
+    if (!branchPassesFilter(branch)) return;
+    if (search && !branch.toLowerCase().includes(search)) return;
+    const days = Object.entries(dayMap).filter(([d]) => d >= gfFrom && d <= gfTo);
+    const total = days.reduce((s,[,v]) => s+v, 0);
+    if (total === 0) return;
+    const activeDays = days.filter(([,v]) => v>0).length || 1;
+    branchMap[branch] = { total, activeDays, avg: Math.round(total/activeDays) };
+  });
+
+  let rows = Object.entries(branchMap).map(([branch, d]) => ({ branch, ...d }));
+
+  if (sortBy === 'total') rows.sort((a,b) => b.total - a.total);
+  else if (sortBy === 'name') rows.sort((a,b) => a.branch.localeCompare(b.branch, 'he'));
+  else if (sortBy === 'avg')  rows.sort((a,b) => b.avg - a.avg);
+
+  const grandTotal = rows.reduce((s,r) => s+r.total, 0) || 1;
+
+  // חשב "לא מזוהה" = סה"כ יומי מינוס כל הסניפים המזוהים
+  const dailyTotal = filteredDaily().reduce((s,r) => s+r.total, 0);
+  const unknownTotal = Math.max(0, dailyTotal - rows.reduce((s,r) => s+r.total, 0));
+  const grandTotalWithUnknown = grandTotal + unknownTotal;
+
+  // אם יש "לא מזוהה" ואין חיפוש פעיל — הוסף שורה
+  if (unknownTotal > 0 && !search) {
+    const activeDays = filteredDaily().filter(r=>r.total>0).length || 1;
+    rows.push({ branch: '— לא מזוהה —', total: unknownTotal, activeDays, avg: Math.round(unknownTotal/activeDays), isUnknown: true });
+  }
+
+  // טבלה
+  const tableHTML = `
+    <div class="card" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;font-family:inherit;direction:rtl">
+        <thead>
+          <tr style="border-bottom:2px solid var(--gray-200)">
+            <th style="text-align:right;padding:10px 14px;color:var(--gray-500);font-weight:700">#</th>
+            <th style="text-align:right;padding:10px 14px;color:var(--gray-500);font-weight:700">סניף</th>
+            <th style="text-align:center;padding:10px 14px;color:var(--gray-500);font-weight:700">סה"כ פניות</th>
+            <th style="text-align:center;padding:10px 14px;color:var(--gray-500);font-weight:700">ממוצע יומי</th>
+            <th style="text-align:center;padding:10px 14px;color:var(--gray-500);font-weight:700">% מסה"כ</th>
+            <th style="text-align:right;padding:10px 14px;color:var(--gray-500);font-weight:700;min-width:120px">גרף</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i) => {
+            const pct = (r.total/grandTotal*100).toFixed(1);
+            const barW = Math.round(r.total/grandTotal*100);
+            const rowBg = r.isUnknown ? 'background:#fff7ed' : (i%2===0 ? '' : 'background:var(--gray-50)');
+            return `<tr style="${rowBg};border-bottom:1px solid var(--gray-100)">
+              <td style="padding:9px 14px;color:var(--gray-400);font-size:11px">${i+1}</td>
+              <td style="padding:9px 14px;font-weight:600;color:var(--gray-900)">${r.branch}</td>
+              <td style="padding:9px 14px;text-align:center;font-weight:700;color:var(--red)">${fmt(r.total)}</td>
+              <td style="padding:9px 14px;text-align:center;color:var(--gray-700)">${fmt(r.avg)}</td>
+              <td style="padding:9px 14px;text-align:center;color:var(--gray-600)">${pct}%</td>
+              <td style="padding:9px 14px">
+                <div style="background:var(--gray-100);border-radius:4px;height:8px;overflow:hidden">
+                  <div style="background:var(--red);height:100%;width:${barW}%;border-radius:4px;transition:width 0.3s"></div>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="border-top:2px solid var(--gray-200);background:var(--gray-50)">
+            <td colspan="2" style="padding:10px 14px;font-weight:700">סה"כ (${rows.filter(r=>!r.isUnknown).length} סניפים)</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;color:var(--red)">${fmt(grandTotalWithUnknown)}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  document.getElementById('liron-table-wrap').innerHTML = tableHTML;
+  document.getElementById('liron-cards').innerHTML = '';
+}
+
+// ============================================================
+// EXPORT FUNCTIONS
+// ============================================================
+function dlCSV(rows, filename) {
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function exportMeta() {
+  const ownerLabel = gfOwner === 'franchise' ? 'זכיינים' : gfOwner === 'algad' ? ('אלגד' + (gfCluster !== 'all' ? ' - ' + gfCluster : '')) : 'הכל';
+  return [`"תקופה: ${gfFrom} → ${gfTo}"`, `"שיוך: ${ownerLabel}"`, ''];
+}
+
+
+// תיוגים קריטיים
+function exportCritical() {
+  const lines = [...exportMeta(), ''];
+
+  // תיוגים קריטיים פעילים + סכומים
+  const activeTags = (typeof activeCriticalTags !== 'undefined') ? activeCriticalTags : [];
+  if (activeTags.length) {
+    lines.push('"תיוגים קריטיים"');
+    lines.push(['תיוג', 'קבוצה', 'כמות'].join(','));
+    activeTags.forEach(({tag, group}) => {
+      const dayMap = (DATA.tag_daily && DATA.tag_daily[tag]) || {};
+      const cnt = Object.entries(dayMap).filter(([d]) => d >= gfFrom && d <= gfTo).reduce((s,[,v])=>s+v,0);
+      lines.push([`"${tag}"`, `"${group}"`, cnt].join(','));
+    });
+    lines.push('');
+  }
+
+  // סניפים קריטיים
+  const branchSums = {};
+  (activeTags.length ? activeTags : []).forEach(({tag}) => {
+    if (DATA.tag_branch_daily && DATA.tag_branch_daily[tag]) {
+      Object.entries(DATA.tag_branch_daily[tag]).forEach(([branch, dayMap]) => {
+        if (!branchPassesFilter(branch)) return;
+        const cnt = Object.entries(dayMap).filter(([d]) => d >= gfFrom && d <= gfTo).reduce((s,[,v])=>s+v,0);
+        if (cnt > 0) branchSums[branch] = (branchSums[branch]||0) + cnt;
+      });
+    }
+  });
+
+  const branchRows = Object.entries(branchSums).sort((a,b)=>b[1]-a[1]);
+  if (branchRows.length) {
+    lines.push('"סניפים עם תיוגים קריטיים"');
+    lines.push(['#', 'סניף', 'כמות'].join(','));
+    branchRows.forEach(([branch, cnt], i) => lines.push([i+1, `"${branch}"`, cnt].join(',')));
+  }
+
+  dlCSV(lines, `תיוגים_קריטיים_${gfFrom}_${gfTo}.csv`);
+}
+
+// סקירה כללית — תיוגים
+function exportOverview() {
+  const cat = document.getElementById('ov-cat').value;
+  const tags = filteredTags();
+  const filtered = cat === 'all' ? tags : tags.filter(t => getCategory(t.tag) === cat);
+  const total = filtered.reduce((s,r) => s+r.count, 0) || 1;
+  const lines = [
+    ...exportMeta(),
+    `"קטגוריה: ${cat === 'all' ? 'הכל' : cat}"`,
+    '',
+    ['#', 'תיוג', 'כמות', '% מסה"כ'].join(','),
+    ...filtered.map((r,i) => [i+1, `"${r.tag}"`, r.count, (r.count/total*100).toFixed(1)+'%'].join(',')),
+    `"סה"כ",,${total},100%`
+  ];
+  dlCSV(lines, `תיוגים_${gfFrom}_${gfTo}.csv`);
+}
+
+// סניפים
+function exportBranches() {
+  const n = parseInt(document.getElementById('br-count').value) || 999;
+  const branchData = filteredTopBranches().slice(0, n);
+  const total = branchData.reduce((s,r) => s+r.count, 0) || 1;
+  const lines = [
+    ...exportMeta(),
+    '',
+    ['#', 'סניף', 'פניות', '% מסה"כ'].join(','),
+    ...branchData.map((r,i) => [i+1, `"${r.branch}"`, r.count, (r.count/total*100).toFixed(1)+'%'].join(',')),
+    `"סה"כ",,${total},100%`
+  ];
+  dlCSV(lines, `סניפים_${gfFrom}_${gfTo}.csv`);
+}
+
+// תובנות — שינויי תיוגים
+function exportInsights() {
+  const insEl = document.getElementById('ins-list');
+  if (!insEl) return;
+  const rows = insEl.querySelectorAll('.insight-item');
+  const lines = [
+    ...exportMeta(),
+    '',
+    ['תיוג', 'נוכחי', 'קודם', 'שינוי %', 'כיוון'].join(',')
+  ];
+  rows.forEach(row => {
+    const tag  = row.querySelector('.insight-tag')?.textContent?.trim() || '';
+    const curr = row.querySelector('.insight-curr')?.textContent?.trim() || '';
+    const prev = row.querySelector('.insight-prev')?.textContent?.trim() || '';
+    const pct  = row.querySelector('.insight-pct')?.textContent?.trim() || '';
+    const dir  = row.querySelector('.insight-arrow')?.textContent?.trim() || '';
+    lines.push([`"${tag}"`, curr, prev, pct, dir].join(','));
+  });
+  dlCSV(lines, `תובנות_${gfFrom}_${gfTo}.csv`);
+}
+
 function renderAll() {
   const active = document.querySelector('.tab-content.active');
   if (!active) return;
@@ -1592,6 +1976,7 @@ function renderAll() {
   if (id==='tab-branches') renderBranches();
   if (id==='tab-critical') renderCritical();
   if (id==='tab-insights') renderInsights();
+  if (id==='tab-liron') renderLiron();
 }
 
 // ============================================================
